@@ -9,7 +9,7 @@ CFLAGS=`pkg-config --cflags --libs gtk+-3.0`
 all: t
 
 t: $(PROGSRC) $(LIBSRC)
-	gcc -o t $(PROGSRC) $(LIBSRC) $(CFLAGS) $(LIBS)
+	gcc -Wall -Werror -o t $(PROGSRC) $(LIBSRC) $(CFLAGS) $(LIBS)
 
 clean:
 	rm -rf t
