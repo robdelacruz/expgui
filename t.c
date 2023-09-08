@@ -1,85 +1,98 @@
-#include <gtk/gtk.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include <assert.h>
 
-GtkWidget *create_menubar(GtkWidget *w);
+void quit(const char *s);
 
-void panic(GError *err) {
-    fprintf(stderr, "panic: %s\n", err->message);
-    g_error_free(err);
-    exit(1);
+typedef struct {
+    char *date;
+    char *desc;
+    uint32_t amt;
+    char *cat;
+} Expense;
+
+typedef struct {
+    size_t item_size;
+    size_t len;
+    size_t size;
+    void *data;
+} Array;
+
+// Pointer to array element i.
+#define ARRAY_ITEM_PTR(a, i) (a->data + ((i) * a->item_size))
+
+// Set item to ith position in the array.
+#define ARRAY_SET(a, i, item) memcpy(ARRAY_ITEM_PTR(a, i), item, a->item_size);
+
+Array *array_new(size_t item_size, size_t init_size) {
+    assert(item_size > 0);
+    if (init_size == 0)
+        init_size = 8;
+
+    Array *a = malloc(sizeof(Array));
+    a->item_size = item_size;
+    a->len = 0;
+    a->size = init_size;
+    a->data = calloc(a->item_size, a->size);
+    return a;
+}
+
+void array_append(Array *a, void *item) {
+    assert(a->len <= a->size);
+
+    a->len++;
+    if (a->len > a->size) {
+        a->size += 16;
+        a->data = reallocarray(a->data, a->item_size, a->size);
+        memset(ARRAY_ITEM_PTR(a, a->len), 0, (a->size - a->len) * a->item_size);
+    }
+    ARRAY_SET(a, a->len-1, item);
+}
+
+void *array_get(Array *a, uint i) {
+    if (i >= a->len) {
+        return NULL;
+    }
+    return ARRAY_ITEM_PTR(a, i);
 }
 
 int main(int argc, char *argv[]) {
-    //GError *err = NULL;
-    GtkWidget *w;
-    GtkWidget *vbox;
-    GtkWidget *mb;
+    if (argc <= 1) {
+        quit("No expense file arg.");
+    }
 
-    GtkWidget *nb;
-    GtkWidget *nb_lbl1, *nb_lbl2, *nb_lbl3;
-    GtkWidget *expenses, *catsum, *ytd;
+    char *expfile = argv[1];
+    printf("Expense file: %s\n", expfile);
 
-    gtk_init(&argc, &argv);
+    Array *expenses = array_new(sizeof(Expense), 0);
+    Expense exp;
 
-    // window
-    w = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(w), "gtktest");
-    gtk_window_set_default_size(GTK_WINDOW(w), 640, 300);
-    gtk_container_set_border_width(GTK_CONTAINER(w), 10);
-    g_signal_connect(w, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+    exp.date = strdup("2023-09-02");
+    exp.desc = strdup("rustans");
+    exp.amt = 188050;   // 1880.50
+    exp.cat = strdup("grocery");
+    array_append(expenses, &exp);
 
-    mb = create_menubar(w);
+    exp.date = strdup("2023-09-03");
+    exp.desc = strdup("grab");
+    exp.amt = 17200;   // 172.00
+    exp.cat = strdup("commute");
+    array_append(expenses, &exp);
 
-    // notebook
-    nb = gtk_notebook_new();
-    nb_lbl1 = gtk_label_new("Expenses");
-    nb_lbl2 = gtk_label_new("Category Summary");
-    nb_lbl3 = gtk_label_new("Yearly Summary");
-
-    expenses = gtk_label_new("Expenses list");
-    catsum = gtk_label_new("Category Summary");
-    ytd = gtk_label_new("Year to date");
-
-    gtk_notebook_append_page(GTK_NOTEBOOK(nb), expenses, nb_lbl1);
-    gtk_notebook_append_page(GTK_NOTEBOOK(nb), catsum, nb_lbl2);
-    gtk_notebook_append_page(GTK_NOTEBOOK(nb), ytd, nb_lbl3);
-    gtk_notebook_set_tab_pos(GTK_NOTEBOOK(nb), GTK_POS_BOTTOM);
-
-    // vbox: menubar, nb
-    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), mb, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), nb, TRUE, TRUE, 0);
-
-    gtk_container_add(GTK_CONTAINER(w), vbox);
-    gtk_widget_show_all(w);
-    gtk_main();
-    return 0;
+    printf("List expenses...\n");
+    for (int i=0; i < expenses->len; i++) {
+        Expense *p = array_get(expenses, i);
+        printf("%d: %12s %20s %9.2f %15s\n", i, p->date, p->desc, (float)(p->amt / 10), p->cat);
+    }
 }
 
-GtkWidget *create_menubar(GtkWidget *w) {
-    GtkWidget *mb;
-    GtkWidget *filemenu, *filemi, *newmi, *openmi, *quitmi;
-    GtkAccelGroup *accel;
-
-    mb = gtk_menu_bar_new();
-    filemenu = gtk_menu_new();
-    filemi = gtk_menu_item_new_with_mnemonic("_File");
-    newmi = gtk_menu_item_new_with_mnemonic("_New");
-    openmi = gtk_menu_item_new_with_mnemonic("_Open");
-    quitmi = gtk_menu_item_new_with_mnemonic("_Quit");
-    gtk_menu_item_set_submenu(GTK_MENU_ITEM(filemi), filemenu);
-    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), newmi);
-    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), openmi);
-    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), quitmi);
-    gtk_menu_shell_append(GTK_MENU_SHELL(mb), filemi);
-    g_signal_connect(quitmi, "activate", G_CALLBACK(gtk_main_quit), NULL);
-
-    // accelerators
-    accel = gtk_accel_group_new();
-    gtk_window_add_accel_group(GTK_WINDOW(w), accel);
-    gtk_widget_add_accelerator(newmi, "activate", accel, GDK_KEY_N, GDK_SHIFT_MASK | GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
-    gtk_widget_add_accelerator(openmi, "activate", accel, GDK_KEY_O, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
-    gtk_widget_add_accelerator(quitmi, "activate", accel, GDK_KEY_Q, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
-
-    return mb;
+void quit(const char *s) {
+    printf("Error: %s\n", s);
+    exit(1);
 }
+
+
+
 
