@@ -54,11 +54,19 @@ char *read_field(char *startp, char **field) {
 
     if (*p == ';') {
         *p = '\0';
-        *field = strdup(startp);
+        *field = bs_strdup(startp);
         return skip_ws(p+1);
     }
 
-    *field = strdup(startp);
+    *field = bs_strdup(startp);
+    return p;
+}
+
+char *read_field_double(char *startp, double *field) {
+    char *sfield;
+    char *p = read_field(startp, &sfield);
+    *field = atof(sfield);
+    bs_free(sfield);
     return p;
 }
 
@@ -69,11 +77,7 @@ void read_expense_line(char *buf, Expense *exp) {
     p = read_field(p, &exp->date);
     p = read_field(p, &exp->time);
     p = read_field(p, &exp->desc);
-
-    char *amt_str;
-    p = read_field(p, &amt_str);
-    exp->amt = atof(amt_str);
-
+    p = read_field_double(p, &exp->amt);
     p = read_field(p, &exp->cat);
 }
 
@@ -93,16 +97,14 @@ int main(int argc, char *argv[]) {
 
     BSArray *exps = bs_array_type_new(Expense, 0);
     bs_array_set_clear_func(exps, clear_expense);
-
     Expense exp;
-
-    char *buf = malloc(BUFLINE_SIZE);
+    char *buf = bs_malloc(BUFLINE_SIZE);
     size_t buf_size = BUFLINE_SIZE;
     while (1) {
         errno = 0;
         int z = getline(&buf, &buf_size, f);
         if (z == -1 && errno != 0) {
-            free(buf);
+            bs_free(buf);
             fclose(f);
             panic("Error reading expense line");
         }
@@ -113,16 +115,15 @@ int main(int argc, char *argv[]) {
         read_expense_line(buf, &exp);
         bs_array_append(exps, &exp);
     }
+    bs_free(buf);
+    fclose(f);
 
     printf("List expenses...\n");
     for (int i=0; i < exps->len; i++) {
         Expense *p = bs_array_get(exps, i);
         printf("%d: %-12s %-35s %9.2f  %-15s\n", i, p->date, p->desc, p->amt, p->cat);
     }
-
     bs_array_free(exps);
-
-    fclose(f);
 }
 
 static inline void quit(const char *s) {

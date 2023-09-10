@@ -6,6 +6,17 @@
 typedef void (*BSDestroyFunc)(void *);
 typedef void (*BSForeachFunc)(uint, void *);
 
+#define bs_malloc(size) malloc(size)
+#define bs_free(ptr) free(ptr)
+#define bs_calloc(nmemb, size) calloc(nmemb, size)
+#define bs_realloc(ptr, size) realloc(ptr, size)
+#define bs_reallocarray(ptr, nmemb, size) reallocarray(ptr, nmemb, size)
+#define bs_alloca(size) alloca(size)
+#define bs_strdup(s) strdup(s)
+#define bs_strndup(s, n) strndup(s, n)
+#define bs_strdupa(s) strdupa(s)
+#define bs_strndupa(s) strndupa(s)
+
 /*** BSArray ***/
 typedef struct {
     void *data;

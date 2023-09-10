@@ -14,11 +14,11 @@ BSArray *bs_array_new(size_t item_size, size_t init_size) {
     if (init_size == 0)
         init_size = 8;
 
-    BSArray *a = malloc(sizeof(BSArray));
+    BSArray *a = bs_malloc(sizeof(BSArray));
     a->item_size = item_size;
     a->len = 0;
     a->size = init_size;
-    a->data = calloc(a->item_size, a->size);
+    a->data = bs_calloc(a->item_size, a->size);
     a->clearfunc = NULL;
     return a;
 }
@@ -31,8 +31,8 @@ void bs_array_free(BSArray *a) {
             pitem += a->item_size;
         }
     }
-    free(a->data);
-    free(a);
+    bs_free(a->data);
+    bs_free(a);
 }
 
 void bs_array_set_clear_func(BSArray *a, BSDestroyFunc clearfunc) {
@@ -56,7 +56,7 @@ void bs_array_append(BSArray *a, void *item) {
     a->len++;
     if (a->len > a->size) {
         a->size += 16;
-        a->data = reallocarray(a->data, a->item_size, a->size);
+        a->data = bs_reallocarray(a->data, a->item_size, a->size);
         memset(bs_array_data_offset(a, a->len), 0, (a->size - a->len) * a->item_size);
     }
     bs_array_set_data_item(a, a->len-1, item);
@@ -94,21 +94,21 @@ BSString *bs_string_new(char *s) {
     }
     size_t s_len = strlen(s);
 
-    BSString *str = malloc(sizeof(BSString));
+    BSString *str = bs_malloc(sizeof(BSString));
     str->len = s_len;
     str->size = s_len;
-    str->s = malloc(str->size+1);
+    str->s = bs_malloc(str->size+1);
     zero_s(str);
     strcpy(str->s, s);
 
     return str;
 }
 BSString *bs_string_size_new(size_t size) {
-    BSString *str = malloc(sizeof(BSString));
+    BSString *str = bs_malloc(sizeof(BSString));
 
     str->len = 0;
     str->size = size;
-    str->s = malloc(str->size+1);
+    str->s = bs_malloc(str->size+1);
     zero_s(str);
 
     return str;
@@ -117,15 +117,15 @@ void bs_string_free(BSString *str) {
     assert(str->s != NULL);
 
     zero_s(str);
-    free(str->s);
+    bs_free(str->s);
     str->s = NULL;
-    free(str);
+    bs_free(str);
 }
 void bs_string_assign(BSString *str, char *s) {
     size_t s_len = strlen(s);
     if (s_len > str->size) {
         str->size = s_len;
-        str->s = realloc(str->s, str->size+1);
+        str->s = bs_realloc(str->s, str->size+1);
     }
     zero_s(str);
     strcpy(str->s, s);
@@ -142,7 +142,7 @@ void bs_string_assign_sprintf(BSString *str, char *fmt, ...) {
         return;
 
     bs_string_assign(str, ps);
-    free(ps);
+    bs_free(ps);
 }
 
 void bs_string_append_sprintf(BSString *str, char *fmt, ...) {
@@ -154,14 +154,14 @@ void bs_string_append_sprintf(BSString *str, char *fmt, ...) {
     if (z == -1) return;
 
     bs_string_append(str, ps);
-    free(ps);
+    bs_free(ps);
 }
 
 void bs_string_append(BSString *str, char *s) {
     size_t s_len = strlen(s);
     if (str->len + s_len > str->size) {
         str->size = str->len + s_len;
-        str->s = realloc(str->s, str->size+1);
+        str->s = bs_realloc(str->s, str->size+1);
         zero_unused_s(str);
     }
 
@@ -173,7 +173,7 @@ void bs_string_append_char(BSString *str, char c) {
     if (str->len + 1 > str->size) {
         // Grow string by ^2
         str->size = str->len + ((str->len+1) * 2);
-        str->s = realloc(str->s, str->size+1);
+        str->s = bs_realloc(str->s, str->size+1);
         zero_unused_s(str);
     }
 
