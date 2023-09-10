@@ -15,7 +15,7 @@ typedef struct {
     char *date;
     char *time;
     char *desc;
-    uint32_t amt;
+    double amt;
     char *cat;
 } Expense;
 
@@ -40,74 +40,41 @@ void chomp(char *buf) {
     }
 }
 
-char *read_field(char *startp, char **field) {
-    char *p = startp;
-    while (*p != '\0') {
-        if (*p == ';') {
-            *p = '\0';
-            *field = strdup(startp);
-            return p+1;
-        }
-        p++;
-    }
-    *field = strdup("");
-    return NULL;
-}
-
 char *skip_ws(char *startp) {
     char *p = startp;
-    while (*p != '\0') {
-        if (*p != ' ')
-            return p;
+    while (*p == ' ')
         p++;
+    return p;
+}
+
+char *read_field(char *startp, char **field) {
+    char *p = startp;
+    while (*p != '\0' && *p != ';')
+        p++;
+
+    if (*p == ';') {
+        *p = '\0';
+        *field = strdup(startp);
+        return skip_ws(p+1);
     }
-    return NULL;
+
+    *field = strdup(startp);
+    return p;
 }
 
 //2016-05-01; 00:00; Mochi Cream coffee; 100.00; coffee
 void read_expense_line(char *buf, Expense *exp) {
     char *p = buf;
 
-    while (1) {
-        p = read_field(p, &exp->date);
-        if (p == NULL)
-            break;
-        p = skip_ws(p);
-        if (p == NULL)
-            break;
+    p = read_field(p, &exp->date);
+    p = read_field(p, &exp->time);
+    p = read_field(p, &exp->desc);
 
-        p = read_field(p, &exp->time);
-        if (p == NULL)
-            break;
-        p = skip_ws(p);
-        if (p == NULL)
-            break;
-    
-        p = read_field(p, &exp->desc);
-        if (p == NULL)
-            break;
-        p = skip_ws(p);
-        if (p == NULL)
-            break;
-    
-        char *amt;
-        p = read_field(p, &amt);
-        if (p == NULL)
-            break;
-        p = skip_ws(p);
-        if (p == NULL)
-            break;
-        exp->amt = 12300; // $$
+    char *amt_str;
+    p = read_field(p, &amt_str);
+    exp->amt = atof(amt_str);
 
-        p = read_field(p, &exp->cat);
-        if (p == NULL)
-            break;
-        p = skip_ws(p);
-        if (p == NULL)
-            break;
-
-        break;
-    }
+    p = read_field(p, &exp->cat);
 }
 
 #define BUFLINE_SIZE 255
@@ -150,7 +117,7 @@ int main(int argc, char *argv[]) {
     printf("List expenses...\n");
     for (int i=0; i < exps->len; i++) {
         Expense *p = bs_array_get(exps, i);
-        printf("%d: %-12s %-35s %9.2f %-15s\n", i, p->date, p->desc, (float)(p->amt / 10), p->cat);
+        printf("%d: %-12s %-35s %9.2f  %-15s\n", i, p->date, p->desc, p->amt, p->cat);
     }
 
     bs_array_free(exps);
