@@ -71,10 +71,10 @@ void *bs_array_get(BSArray *a, uint i) {
 }
 
 // Run function for each array item.
-void bs_array_foreach(BSArray *a, BSForeachFunc func) {
+void bs_array_foreach(BSArray *a, BSForeachFunc func, void *data) {
     void *pitem = a->data;
     for (int i=0; i < a->len; i++) {
-        (*func)(i, pitem);
+        (*func)(i, pitem, data);
         pitem += a->item_size;
     }
 }
