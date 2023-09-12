@@ -12,6 +12,13 @@ static inline void quit(const char *s);
 static inline void print_error(const char *s);
 static inline void panic(const char *s);
 
+int compare_expense_date(void *a, void *b) {
+    Expense *expa = (Expense *)a;
+    Expense *expb = (Expense *)b;
+    
+    return strcmp(expa->date, expb->date);
+}
+
 int main(int argc, char *argv[]) {
     if (argc <= 1) {
         quit("No expense file arg.");
@@ -21,6 +28,8 @@ int main(int argc, char *argv[]) {
     BSArray *exps = load_expense_file(expfile);
     if (exps == NULL)
         panic("Error reading expense file");
+
+//    bs_array_sort(exps, compare_expense_date);
 
     printf("List expenses...\n");
     for (int i=0; i < exps->len; i++) {

@@ -7,10 +7,13 @@ LIBSRC=bslib.c
 CFLAGS=-Wall -Werror `pkg-config --cflags gtk+-3.0`
 LIBS=`pkg-config --libs gtk+-3.0`
 
-all: t
+all: t t2
 
 t: $(PROGSRC) $(LIBSRC)
 	gcc $(CFLAGS) -o t $(PROGSRC) $(LIBSRC) $(LIBS)
+
+t2: t2.c
+	gcc -Wall -Werror -o t2 t2.c
 
 clean:
 	rm -rf t

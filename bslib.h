@@ -5,6 +5,7 @@
 
 typedef void (*BSDestroyFunc)(void *);
 typedef void (*BSForeachFunc)(uint index, void *item, void *data);
+typedef int (*BSCompareFunc)(void *a, void *b);
 
 #define bs_malloc(size) malloc(size)
 #define bs_free(ptr) free(ptr)
@@ -33,7 +34,10 @@ void bs_array_free(BSArray *a);
 void bs_array_set_clear_func(BSArray *a, BSDestroyFunc clearfunc);
 void bs_array_append(BSArray *a, void *item);
 void *bs_array_get(BSArray *a, uint i);
+void bs_array_set(BSArray *a, uint i, void *data);
 void bs_array_foreach(BSArray *a, BSForeachFunc func, void *data);
+void bs_array_sort(BSArray *a, BSCompareFunc cmpfunc); 
+void bs_array_swap(BSArray *a, int i, int j);
 
 
 /*** BSString ***/

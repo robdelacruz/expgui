@@ -1,4 +1,6 @@
 *.swp
 t
+t2
 .gitignore
+expenses
 

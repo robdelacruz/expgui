@@ -70,6 +70,12 @@ void *bs_array_get(BSArray *a, uint i) {
     return bs_array_data_offset(a, i);
 }
 
+void bs_array_set(BSArray *a, uint i, void *data) {
+    assert(i < a->len);
+    void *target = bs_array_data_offset(a, i);
+    memcpy(target, data, a->item_size);
+}
+
 // Run function for each array item.
 void bs_array_foreach(BSArray *a, BSForeachFunc func, void *data) {
     void *pitem = a->data;
@@ -77,6 +83,39 @@ void bs_array_foreach(BSArray *a, BSForeachFunc func, void *data) {
         (*func)(i, pitem, data);
         pitem += a->item_size;
     }
+}
+
+void bs_array_swap(BSArray *a, int i, int j) {
+    void *tmp = bs_array_get(a, i);
+    bs_array_set(a, i, bs_array_get(a, j));
+    bs_array_set(a, j, tmp);
+}
+
+static int bs_array_sort_partition(BSArray *a, int start, int end, BSCompareFunc cmpfunc) {
+    int imid = start;
+    void *pivot = bs_array_get(a, end);
+
+    for (int i=start; i < end; i++) {
+        if (cmpfunc(bs_array_get(a, i), pivot) < 0) {
+            bs_array_swap(a, imid, i);
+            imid++;
+        }
+    }
+    bs_array_swap(a, imid, end);
+    return imid;
+}
+
+static void bs_array_sort_part(BSArray *a, int start, int end, BSCompareFunc cmpfunc) {
+    if (start >= end)
+        return;
+
+    int pivot = bs_array_sort_partition(a, start, end, cmpfunc);
+    bs_array_sort_part(a, start, pivot-1, cmpfunc);
+    bs_array_sort_part(a, pivot+1, end, cmpfunc);
+}
+
+void bs_array_sort(BSArray *a, BSCompareFunc cmpfunc) { 
+    bs_array_sort_part(a, 0, a->len-1, cmpfunc);
 }
 
 /*** BSString ***/
