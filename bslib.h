@@ -25,6 +25,7 @@ typedef struct {
     size_t len;
     size_t size;
     BSDestroyFunc clearfunc;
+    void *tmpitem;
 } BSArray;
 
 #define bs_array_type_new(type, init_size) \
@@ -36,8 +37,10 @@ void bs_array_append(BSArray *a, void *item);
 void *bs_array_get(BSArray *a, uint i);
 void bs_array_set(BSArray *a, uint i, void *data);
 void bs_array_foreach(BSArray *a, BSForeachFunc func, void *data);
-void bs_array_sort(BSArray *a, BSCompareFunc cmpfunc); 
 void bs_array_swap(BSArray *a, int i, int j);
+void bs_array_sort(BSArray *a, BSCompareFunc cmpfunc); 
+void bs_array_reverse(BSArray *a);
+void bs_array_shuffle(BSArray *a);
 
 
 /*** BSString ***/

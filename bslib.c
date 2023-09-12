@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <errno.h>
+#include <time.h>
 
 #include "bslib.h"
 
@@ -20,6 +22,7 @@ BSArray *bs_array_new(size_t item_size, size_t init_size) {
     a->size = init_size;
     a->data = bs_calloc(a->item_size, a->size);
     a->clearfunc = NULL;
+    a->tmpitem = bs_malloc(a->item_size);
     return a;
 }
 
@@ -32,6 +35,7 @@ void bs_array_free(BSArray *a) {
         }
     }
     bs_free(a->data);
+    bs_free(a->tmpitem);
     bs_free(a);
 }
 
@@ -44,11 +48,6 @@ static inline void *bs_array_data_offset(BSArray *a, uint i) {
     return a->data + (i * a->item_size);
 }
 
-// Copy pitem into a->data element i
-static inline void bs_array_set_data_item(BSArray *a, uint i, void *pitem) {
-    memcpy(bs_array_data_offset(a, i), pitem, a->item_size);
-}
-
 // Append item, allocating more memory as needed.
 void bs_array_append(BSArray *a, void *item) {
     assert(a->len <= a->size);
@@ -59,7 +58,7 @@ void bs_array_append(BSArray *a, void *item) {
         a->data = bs_reallocarray(a->data, a->item_size, a->size);
         memset(bs_array_data_offset(a, a->len), 0, (a->size - a->len) * a->item_size);
     }
-    bs_array_set_data_item(a, a->len-1, item);
+    bs_array_set(a, a->len-1, item);
 }
 
 // Return ptr to item at index i.
@@ -86,9 +85,9 @@ void bs_array_foreach(BSArray *a, BSForeachFunc func, void *data) {
 }
 
 void bs_array_swap(BSArray *a, int i, int j) {
-    void *tmp = bs_array_get(a, i);
-    bs_array_set(a, i, bs_array_get(a, j));
-    bs_array_set(a, j, tmp);
+    memcpy(a->tmpitem, bs_array_get(a, i), a->item_size);  // tmp = a[i]
+    bs_array_set(a, i, bs_array_get(a, j));                // a[i] = a[j]
+    memcpy(bs_array_get(a, j), a->tmpitem, a->item_size);  // a[j] = tmp
 }
 
 static int bs_array_sort_partition(BSArray *a, int start, int end, BSCompareFunc cmpfunc) {
@@ -117,6 +116,33 @@ static void bs_array_sort_part(BSArray *a, int start, int end, BSCompareFunc cmp
 void bs_array_sort(BSArray *a, BSCompareFunc cmpfunc) { 
     bs_array_sort_part(a, 0, a->len-1, cmpfunc);
 }
+
+void bs_array_reverse(BSArray *a) {
+    int low = 0;
+    int high = a->len-1;
+
+    while (high > low) {
+        bs_array_swap(a, low, high);
+        low++;
+        high--;
+    }
+}
+
+// Return random int from 0 to limit-1
+static inline int randint(int limit) {
+    return rand() % limit;
+}
+
+void bs_array_shuffle(BSArray *a) {
+    srand(time(NULL));
+
+    for (int i=0; i < a->len; i++) {
+        int j = randint(a->len);
+        int k = randint(a->len);
+        bs_array_swap(a, j, k);
+    }
+}
+
 
 /*** BSString ***/
 static inline void zero_s(BSString *str) {

@@ -29,7 +29,9 @@ int main(int argc, char *argv[]) {
     if (exps == NULL)
         panic("Error reading expense file");
 
-//    bs_array_sort(exps, compare_expense_date);
+    bs_array_shuffle(exps);
+    //bs_array_reverse(exps);
+    bs_array_sort(exps, compare_expense_date);
 
     printf("List expenses...\n");
     for (int i=0; i < exps->len; i++) {
