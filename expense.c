@@ -10,7 +10,7 @@
 
 #define BUFLINE_SIZE 255
 
-void clear_expense(void *pitem) {
+static void clear_expense(void *pitem) {
     Expense *exp = pitem;
     if (exp->date)
         free(exp->date);
@@ -20,6 +20,17 @@ void clear_expense(void *pitem) {
         free(exp->desc);
     if (exp->cat)
         free(exp->cat);
+}
+
+static int compare_expense_date(void *a, void *b) {
+    Expense *expa = (Expense *)a;
+    Expense *expb = (Expense *)b;
+    
+    return strcmp(expa->date, expb->date);
+}
+
+void sort_expenses_bydate(BSArray *exps) {
+    bs_array_sort(exps, compare_expense_date);
 }
 
 // Remove trailing \n or \r chars.
@@ -114,5 +125,12 @@ BSArray *load_expense_file(const char *expfile) {
 
 int save_expense_file(BSArray *exps, const char *expfile) {
     return 0;
+}
+
+void print_expenses(BSArray *exps) {
+    for (int i=0; i < exps->len; i++) {
+        Expense *p = bs_array_get(exps, i);
+        printf("%d: %-12s %-35s %9.2f  %-15s\n", i, p->date, p->desc, p->amt, p->cat);
+    }
 }
 

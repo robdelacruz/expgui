@@ -11,9 +11,10 @@ typedef struct {
     char *cat;
 } Expense;
 
-void clear_expense(void *pitem);
 BSArray *load_expense_file(const char *expfile);
 int save_expense_file(BSArray *exps, const char *expfile);
+void sort_expenses_bydate(BSArray *exps);
+void print_expenses(BSArray *exps);
 
 #endif
 
