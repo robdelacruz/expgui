@@ -9,13 +9,25 @@
 #include "bslib.h"
 #include "expense.h"
 
-static inline void quit(const char *s);
-static inline void print_error(const char *s);
-static inline void panic(const char *s);
+typedef struct {
+    GtkWidget *mainwin;
+    GtkWidget *menubar;
+    GtkWidget *nb;
+    GtkWidget *tv_expenses;
+} UI;
+
+void quit(const char *s);
+void print_error(const char *s);
+void panic(const char *s);
 static void setupui();
-GtkWidget *create_menubar(GtkWidget *w);
+static GtkWidget *create_menubar(GtkWidget *w);
+static GtkWidget *create_expenses_treeview();
+static void fill_expenses_store(UI *ui, BSArray *exps);
+
+static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
 int main(int argc, char *argv[]) {
+    UI ui;
     char *expfile = NULL;
     BSArray *exps = NULL;
 
@@ -29,36 +41,36 @@ int main(int argc, char *argv[]) {
     }
 
     gtk_init(&argc, &argv);
-    setupui();
-    gtk_main();
+    setupui(&ui);
+    fill_expenses_store(&ui, exps);
 
+    gtk_main();
     return 0;
 }
 
-static inline void quit(const char *s) {
+void quit(const char *s) {
     if (s)
         printf("%s\n", s);
     exit(0);
 }
-static inline void print_error(const char *s) {
+void print_error(const char *s) {
     if (s)
         fprintf(stderr, "%s: %s\n", s, strerror(errno));
     else
         fprintf(stderr, "%s\n", strerror(errno));
 }
-static inline void panic(const char *s) {
+void panic(const char *s) {
     print_error(s);
     exit(1);
 }
 
-static void setupui() {
+static void setupui(UI *ui) {
     GtkWidget *w;
-    GtkWidget *vbox;
     GtkWidget *mb;
-
     GtkWidget *nb;
-    GtkWidget *nb_lbl1, *nb_lbl2, *nb_lbl3;
-    GtkWidget *expenses, *catsum, *ytd;
+    GtkWidget *tv_expenses;
+    GtkWidget *sw_expenses;
+    GtkWidget *vbox;
 
     // window
     w = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -69,31 +81,31 @@ static void setupui() {
 
     mb = create_menubar(w);
 
-    // notebook
+    sw_expenses = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw_expenses), GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
+    tv_expenses = create_expenses_treeview();
+    gtk_container_add(GTK_CONTAINER(sw_expenses), tv_expenses);
+
+    // nb: sw_expenses
     nb = gtk_notebook_new();
-    nb_lbl1 = gtk_label_new("Expenses");
-    nb_lbl2 = gtk_label_new("Category Summary");
-    nb_lbl3 = gtk_label_new("Yearly Summary");
-
-    expenses = gtk_label_new("Expenses list");
-    catsum = gtk_label_new("Category Summary");
-    ytd = gtk_label_new("Year to date");
-
-    gtk_notebook_append_page(GTK_NOTEBOOK(nb), expenses, nb_lbl1);
-    gtk_notebook_append_page(GTK_NOTEBOOK(nb), catsum, nb_lbl2);
-    gtk_notebook_append_page(GTK_NOTEBOOK(nb), ytd, nb_lbl3);
     gtk_notebook_set_tab_pos(GTK_NOTEBOOK(nb), GTK_POS_BOTTOM);
+    gtk_notebook_append_page(GTK_NOTEBOOK(nb), sw_expenses, gtk_label_new("Expenses"));
 
-    // vbox: menubar, nb
+    // vbox: mb, nb
     vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_box_pack_start(GTK_BOX(vbox), mb, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox), nb, TRUE, TRUE, 0);
 
     gtk_container_add(GTK_CONTAINER(w), vbox);
     gtk_widget_show_all(w);
+
+    ui->mainwin = w;
+    ui->menubar = mb;
+    ui->nb = nb;
+    ui->tv_expenses = tv_expenses;
 }
 
-GtkWidget *create_menubar(GtkWidget *w) {
+static GtkWidget *create_menubar(GtkWidget *w) {
     GtkWidget *mb;
     GtkWidget *filemenu, *filemi, *newmi, *openmi, *quitmi;
     GtkAccelGroup *accel;
@@ -119,5 +131,62 @@ GtkWidget *create_menubar(GtkWidget *w) {
     gtk_widget_add_accelerator(quitmi, "activate", accel, GDK_KEY_Q, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
 
     return mb;
+}
+
+static GtkWidget *create_expenses_treeview() {
+    GtkWidget *tv;
+    GtkCellRenderer *r;
+    GtkTreeViewColumn *col;
+    GtkListStore *ls;
+
+    tv = gtk_tree_view_new();
+
+    r = gtk_cell_renderer_text_new();
+    col = gtk_tree_view_column_new_with_attributes("Date", r, "text", 0, NULL);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
+
+    r = gtk_cell_renderer_text_new();
+    col = gtk_tree_view_column_new_with_attributes("Description", r, "text", 1, NULL);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
+
+    r = gtk_cell_renderer_text_new();
+    col = gtk_tree_view_column_new_with_attributes("Amount", r, "text", 2, NULL);
+    gtk_tree_view_column_set_cell_data_func(col, r, amt_datafunc, NULL, NULL);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
+
+    r = gtk_cell_renderer_text_new();
+    col = gtk_tree_view_column_new_with_attributes("Category", r, "text", 3, NULL);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
+
+    ls = gtk_list_store_new(4, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_FLOAT, G_TYPE_STRING);
+    gtk_tree_view_set_model(GTK_TREE_VIEW(tv), GTK_TREE_MODEL(ls));
+    g_object_unref(ls);
+
+    return tv;
+}
+
+static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data) {
+    float amt;
+    char buf[15];
+
+    gtk_tree_model_get(m, it, 2, &amt, -1);
+    snprintf(buf, sizeof(buf), "%9.2f", amt);
+    g_object_set(r, "text", buf, NULL);
+}
+
+static void fill_expenses_store(UI *ui, BSArray *exps) {
+    GtkListStore *ls;
+    GtkTreeIter it;
+
+    ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(ui->tv_expenses)));
+    assert(ls != NULL);
+
+    gtk_list_store_clear(ls);
+
+    for (int i=0; i < exps->len; i++) {
+        Expense *p = bs_array_get(exps, i);
+        gtk_list_store_append(ls, &it);
+        gtk_list_store_set(ls, &it, 0, p->date, 1, p->desc, 2, p->amt, 3, p->cat, -1);
+    }
 }
 
