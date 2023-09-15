@@ -15,27 +15,27 @@ void panic(const char *s);
 static void setupui();
 static GtkWidget *create_menubar(GtkWidget *w);
 static GtkWidget *create_expenses_treeview();
-static void fill_expenses_store(ExpenseUI *ui, BSArray *exps);
+static void fill_expenses_store(ExpenseUI *ui, BSArray *ee);
 
 static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
 int main(int argc, char *argv[]) {
     ExpenseUI ui;
     char *expfile = NULL;
-    BSArray *exps = NULL;
+    BSArray *ee = NULL;
 
     if (argc > 1) {
         expfile = argv[1];
-        exps = load_expense_file(expfile);
-        if (exps == NULL)
+        ee = load_expense_file(expfile);
+        if (ee == NULL)
             panic("Error reading expense file");
     } else {
-        exps = bs_array_type_new(Expense, 20);
+        ee = bs_array_type_new(ExpenseLine, 20);
     }
 
     gtk_init(&argc, &argv);
     setupui(&ui);
-    fill_expenses_store(&ui, exps);
+    fill_expenses_store(&ui, ee);
 
     gtk_main();
     return 0;
@@ -167,7 +167,7 @@ static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeMode
     g_object_set(r, "text", buf, NULL);
 }
 
-static void fill_expenses_store(ExpenseUI *ui, BSArray *exps) {
+static void fill_expenses_store(ExpenseUI *ui, BSArray *ee) {
     GtkListStore *ls;
     GtkTreeIter it;
 
@@ -176,8 +176,8 @@ static void fill_expenses_store(ExpenseUI *ui, BSArray *exps) {
 
     gtk_list_store_clear(ls);
 
-    for (int i=0; i < exps->len; i++) {
-        Expense *p = bs_array_get(exps, i);
+    for (int i=0; i < ee->len; i++) {
+        ExpenseLine *p = bs_array_get(ee, i);
         gtk_list_store_append(ls, &it);
         gtk_list_store_set(ls, &it, 0, p->date, 1, p->desc, 2, p->amt, 3, p->cat, -1);
     }

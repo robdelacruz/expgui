@@ -10,12 +10,12 @@ typedef struct {
     char *desc;
     double amt;
     char *cat;
-} Expense;
+} ExpenseLine;
 
 BSArray *load_expense_file(const char *expfile);
 int save_expense_file(BSArray *exps, const char *expfile);
-void sort_expenses_bydate(BSArray *exps);
-void print_expenses(BSArray *exps);
+void sort_expenses_bydate(BSArray *ee);
+void print_expenselines(BSArray *ee);
 
 typedef struct {
     GtkWidget *mainwin;
