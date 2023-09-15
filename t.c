@@ -9,25 +9,18 @@
 #include "bslib.h"
 #include "expense.h"
 
-typedef struct {
-    GtkWidget *mainwin;
-    GtkWidget *menubar;
-    GtkWidget *nb;
-    GtkWidget *tv_expenses;
-} UI;
-
 void quit(const char *s);
 void print_error(const char *s);
 void panic(const char *s);
 static void setupui();
 static GtkWidget *create_menubar(GtkWidget *w);
 static GtkWidget *create_expenses_treeview();
-static void fill_expenses_store(UI *ui, BSArray *exps);
+static void fill_expenses_store(ExpenseUI *ui, BSArray *exps);
 
 static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
 int main(int argc, char *argv[]) {
-    UI ui;
+    ExpenseUI ui;
     char *expfile = NULL;
     BSArray *exps = NULL;
 
@@ -64,7 +57,7 @@ void panic(const char *s) {
     exit(1);
 }
 
-static void setupui(UI *ui) {
+static void setupui(ExpenseUI *ui) {
     GtkWidget *w;
     GtkWidget *mb;
     GtkWidget *nb;
@@ -174,7 +167,7 @@ static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeMode
     g_object_set(r, "text", buf, NULL);
 }
 
-static void fill_expenses_store(UI *ui, BSArray *exps) {
+static void fill_expenses_store(ExpenseUI *ui, BSArray *exps) {
     GtkListStore *ls;
     GtkTreeIter it;
 
