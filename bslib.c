@@ -11,6 +11,9 @@
 #include "bslib.h"
 
 /*** BSArray ***/
+static inline void zero_a(BSArray *a) {
+    memset(a->data, 0, a->size * a->item_size);
+}
 BSArray *bs_array_new(size_t item_size, size_t init_size) {
     assert(item_size > 0);
     if (init_size == 0)
@@ -26,7 +29,7 @@ BSArray *bs_array_new(size_t item_size, size_t init_size) {
     return a;
 }
 
-void bs_array_free(BSArray *a) {
+void bs_array_clear(BSArray *a) {
     if (a->clearfunc) {
         void *pitem = a->data;
         for (int i=0; i < a->len; i++) {
@@ -34,6 +37,12 @@ void bs_array_free(BSArray *a) {
             pitem += a->item_size;
         }
     }
+    zero_a(a);
+    a->len = 0;
+}
+
+void bs_array_free(BSArray *a) {
+    bs_array_clear(a);
     bs_free(a->data);
     bs_free(a->tmpitem);
     bs_free(a);

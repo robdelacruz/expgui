@@ -10,28 +10,68 @@
 
 #define BUFLINE_SIZE 255
 
-static void clear_expenseline(void *pitem);
-static int compare_expense_date(void *e1, void *e2);
+static void clear_expense(void *xp);
+static int compare_expense_date(void *xp1, void *xp2);
 static void chomp(char *buf);
 static char *skip_ws(char *startp);
 static char *read_field(char *startp, char **field);
 static char *read_field_double(char *startp, double *field);
-static void read_expense_line(char *buf, ExpenseLine *e);
+static void read_expense_line(char *buf, Expense *xp);
+static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps);
 
-BSArray *load_expense_file(const char *expfile) {
-    ExpenseLine e;
-    BSArray *ee;
+Context *create_context() {
+    Context *ctx = bs_malloc(sizeof(Context));
+
+    ctx->xpfile = NULL;
+    ctx->xps = NULL;
+    ctx->filter_month = 1;
+    ctx->filter_year = 1970;
+    ctx->mainwin = NULL;
+    ctx->menubar = NULL;
+    ctx->notebook = NULL;
+    ctx->tv_xps = NULL;
+
+    return ctx;
+}
+
+void free_context(Context *ctx) {
+    if (ctx->xpfile)
+        free(ctx->xpfile);
+    if (ctx->xps)
+        bs_array_free(ctx->xps);
+    free(ctx);
+}
+
+BSArray *new_xps() {
+    BSArray *xps = bs_array_type_new(Expense, 12);
+    bs_array_set_clear_func(xps, clear_expense);
+    return xps;
+}
+
+static void clear_expense(void *xp) {
+    Expense *p = xp;
+    if (p->date)
+        free(p->date);
+    if (p->time)
+        free(p->time);
+    if (p->desc)
+        free(p->desc);
+    if (p->cat)
+        free(p->cat);
+}
+
+int load_expense_file(Context *ctx, const char *xpfile) {
+    Expense xp;
     FILE *f;
     char *buf;
     size_t buf_size;
     int z;
 
-    f = fopen(expfile, "r");
+    f = fopen(xpfile, "r");
     if (f == NULL)
-        return NULL;
+        return 1;
 
-    ee = bs_array_type_new(ExpenseLine, 0);
-    bs_array_set_clear_func(ee, clear_expenseline);
+    BSArray *xps = new_xps();
     buf = malloc(BUFLINE_SIZE);
     buf_size = BUFLINE_SIZE;
 
@@ -41,32 +81,31 @@ BSArray *load_expense_file(const char *expfile) {
         if (z == -1 && errno != 0) {
             free(buf);
             fclose(f);
-            bs_array_free(ee);
-            return NULL;
+            bs_array_free(xps);
+            return 1;
         }
         if (z == -1)
             break;
 
         chomp(buf);
-        read_expense_line(buf, &e);
-        bs_array_append(ee, &e);
+        read_expense_line(buf, &xp);
+        bs_array_append(ctx->xps, &xp);
     }
 
     free(buf);
     fclose(f);
-    return ee;
-}
 
-static void clear_expenseline(void *pitem) {
-    ExpenseLine *e = pitem;
-    if (e->date)
-        free(e->date);
-    if (e->time)
-        free(e->time);
-    if (e->desc)
-        free(e->desc);
-    if (e->cat)
-        free(e->cat);
+    if (ctx->xpfile)
+        free(ctx->xpfile);
+    if (ctx->xps)
+        bs_array_free(ctx->xps);
+
+    ctx->xpfile = strdup(xpfile);
+    ctx->xps = xps;
+
+    refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->xps);
+
+    return 0;
 }
 
 // Remove trailing \n or \r chars.
@@ -108,36 +147,48 @@ static char *read_field_double(char *startp, double *field) {
     return p;
 }
 
-static void read_expense_line(char *buf, ExpenseLine *e) {
+static void read_expense_line(char *buf, Expense *xp) {
     // Sample expense line:
     // 2016-05-01; 00:00; Mochi Cream coffee; 100.00; coffee
 
     char *p = buf;
-    p = read_field(p, &e->date);
-    p = read_field(p, &e->time);
-    p = read_field(p, &e->desc);
-    p = read_field_double(p, &e->amt);
-    p = read_field(p, &e->cat);
+    p = read_field(p, &xp->date);
+    p = read_field(p, &xp->time);
+    p = read_field(p, &xp->desc);
+    p = read_field_double(p, &xp->amt);
+    p = read_field(p, &xp->cat);
 }
 
-int save_expense_file(BSArray *ee, const char *expfile) {
-    return 0;
-}
-
-static int compare_expense_date(void *e1, void *e2) {
-    ExpenseLine *p1 = (ExpenseLine *)e1;
-    ExpenseLine *p2 = (ExpenseLine *)e2;
+static int compare_expense_date(void *xp1, void *xp2) {
+    Expense *p1 = (Expense *)xp1;
+    Expense *p2 = (Expense *)xp2;
     return strcmp(p1->date, p2->date);
 }
 
-void sort_expenses_bydate(BSArray *ee) {
-    bs_array_sort(ee, compare_expense_date);
+void sort_expenses_bydate(BSArray *xps) {
+    bs_array_sort(xps, compare_expense_date);
 }
 
-void print_expenselines(BSArray *ee) {
-    for (int i=0; i < ee->len; i++) {
-        ExpenseLine *p = bs_array_get(ee, i);
-        printf("%d: %-12s %-35s %9.2f  %-15s\n", i, p->date, p->desc, p->amt, p->cat);
+void print_expenselines(BSArray *xps) {
+    for (int i=0; i < xps->len; i++) {
+        Expense *xp = bs_array_get(xps, i);
+        printf("%d: %-12s %-35s %9.2f  %-15s\n", i, xp->date, xp->desc, xp->amt, xp->cat);
+    }
+}
+
+static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps) {
+    GtkListStore *ls;
+    GtkTreeIter it;
+
+    ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(tv)));
+    assert(ls != NULL);
+
+    gtk_list_store_clear(ls);
+
+    for (int i=0; i < xps->len; i++) {
+        Expense *xp = bs_array_get(xps, i);
+        gtk_list_store_append(ls, &it);
+        gtk_list_store_set(ls, &it, 0, xp->date, 1, xp->desc, 2, xp->amt, 3, xp->cat, -1);
     }
 }
 

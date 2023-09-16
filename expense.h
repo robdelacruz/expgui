@@ -10,30 +10,27 @@ typedef struct {
     char *desc;
     double amt;
     char *cat;
-} ExpenseLine;
-
-BSArray *load_expense_file(const char *expfile);
-int save_expense_file(BSArray *exps, const char *expfile);
-void sort_expenses_bydate(BSArray *ee);
-void print_expenselines(BSArray *ee);
+} Expense;
 
 typedef struct {
+    char *xpfile;
+    BSArray *xps;
+    uint filter_month;
+    uint filter_year;
+
     GtkWidget *mainwin;
     GtkWidget *menubar;
-    GtkWidget *nb;
-    GtkWidget *tv_expenses;
-} ExpenseUI;
+    GtkWidget *notebook;
+    GtkWidget *tv_xps;
+} Context;
 
-typedef struct {
-    uint month;
-    uint year;
-} ExpenseFilter;
+Context *create_context();
+void free_context(Context *ctx);
 
-typedef struct {
-    BSArray *exps;
-    ExpenseFilter filter;
-    ExpenseUI ui;
-} ExpenseContext;
+BSArray *new_xps();
+int load_expense_file(Context *ctx, const char *xpfile);
+void sort_expenses_bydate(BSArray *xps);
+void print_expenselines(BSArray *xps);
 
 #endif
 
