@@ -13,10 +13,11 @@ void quit(const char *s);
 void print_error(const char *s);
 void panic(const char *s);
 static void setupui(Context *ctx);
-static GtkWidget *create_menubar(GtkWidget *w);
+static GtkWidget *create_menubar(Context *ctx, GtkWidget *mainwin);
 static GtkWidget *create_expenses_treeview();
-
 static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
+
+static void file_open(GtkWidget *w, gpointer data);
 
 int main(int argc, char *argv[]) {
     Context *ctx;
@@ -68,7 +69,7 @@ static void setupui(Context *ctx) {
     gtk_container_set_border_width(GTK_CONTAINER(mainwin), 10);
     g_signal_connect(mainwin, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
-    menubar = create_menubar(mainwin);
+    menubar = create_menubar(ctx, mainwin);
 
     sw_expenses = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw_expenses), GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
@@ -94,30 +95,32 @@ static void setupui(Context *ctx) {
     ctx->tv_xps = tv_xps;
 }
 
-static GtkWidget *create_menubar(GtkWidget *w) {
+static GtkWidget *create_menubar(Context *ctx, GtkWidget *mainwin) {
     GtkWidget *menubar;
-    GtkWidget *filemenu, *filemi, *newmi, *openmi, *quitmi;
+    GtkWidget *filemenu, *mi_file, *mi_file_new, *mi_file_open, *mi_file_quit;
     GtkAccelGroup *accel;
 
     menubar = gtk_menu_bar_new();
     filemenu = gtk_menu_new();
-    filemi = gtk_menu_item_new_with_mnemonic("_File");
-    newmi = gtk_menu_item_new_with_mnemonic("_New");
-    openmi = gtk_menu_item_new_with_mnemonic("_Open");
-    quitmi = gtk_menu_item_new_with_mnemonic("_Quit");
-    gtk_menu_item_set_submenu(GTK_MENU_ITEM(filemi), filemenu);
-    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), newmi);
-    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), openmi);
-    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), quitmi);
-    gtk_menu_shell_append(GTK_MENU_SHELL(menubar), filemi);
-    g_signal_connect(quitmi, "activate", G_CALLBACK(gtk_main_quit), NULL);
+    mi_file = gtk_menu_item_new_with_mnemonic("_File");
+    mi_file_new = gtk_menu_item_new_with_mnemonic("_New");
+    mi_file_open = gtk_menu_item_new_with_mnemonic("_Open");
+    mi_file_quit = gtk_menu_item_new_with_mnemonic("_Quit");
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(mi_file), filemenu);
+    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), mi_file_new);
+    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), mi_file_open);
+    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), mi_file_quit);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menubar), mi_file);
+
+    g_signal_connect(mi_file_open, "activate", G_CALLBACK(file_open), ctx);
+    g_signal_connect(mi_file_quit, "activate", G_CALLBACK(gtk_main_quit), NULL);
 
     // accelerators
     accel = gtk_accel_group_new();
-    gtk_window_add_accel_group(GTK_WINDOW(w), accel);
-    gtk_widget_add_accelerator(newmi, "activate", accel, GDK_KEY_N, GDK_SHIFT_MASK | GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
-    gtk_widget_add_accelerator(openmi, "activate", accel, GDK_KEY_O, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
-    gtk_widget_add_accelerator(quitmi, "activate", accel, GDK_KEY_Q, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
+    gtk_window_add_accel_group(GTK_WINDOW(mainwin), accel);
+    gtk_widget_add_accelerator(mi_file_new, "activate", accel, GDK_KEY_N, GDK_SHIFT_MASK | GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
+    gtk_widget_add_accelerator(mi_file_open, "activate", accel, GDK_KEY_O, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
+    gtk_widget_add_accelerator(mi_file_quit, "activate", accel, GDK_KEY_Q, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
 
     return menubar;
 }
@@ -161,5 +164,12 @@ static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeMode
     gtk_tree_model_get(m, it, 2, &amt, -1);
     snprintf(buf, sizeof(buf), "%9.2f", amt);
     g_object_set(r, "text", buf, NULL);
+}
+
+static void file_open(GtkWidget *w, gpointer data) {
+    Context *ctx = data;
+    print_context(ctx);
+
+    load_expense_file(ctx, "expenses");
 }
 

@@ -42,6 +42,13 @@ void free_context(Context *ctx) {
     free(ctx);
 }
 
+void print_context(Context *ctx) {
+    printf("Context:\n");
+    printf("xpfile: '%s'\n", ctx->xpfile);
+    printf("filter_month: %d\n", ctx->filter_month);
+    printf("filter_year: %d\n", ctx->filter_year);
+}
+
 BSArray *new_xps() {
     BSArray *xps = bs_array_type_new(Expense, 12);
     bs_array_set_clear_func(xps, clear_expense);
@@ -79,6 +86,7 @@ int load_expense_file(Context *ctx, const char *xpfile) {
         errno = 0;
         z = getline(&buf, &buf_size, f);
         if (z == -1 && errno != 0) {
+            printf("error: z:%d\n", z);
             free(buf);
             fclose(f);
             bs_array_free(xps);
@@ -89,7 +97,7 @@ int load_expense_file(Context *ctx, const char *xpfile) {
 
         chomp(buf);
         read_expense_line(buf, &xp);
-        bs_array_append(ctx->xps, &xp);
+        bs_array_append(xps, &xp);
     }
 
     free(buf);

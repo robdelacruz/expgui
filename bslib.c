@@ -23,7 +23,7 @@ BSArray *bs_array_new(size_t item_size, size_t init_size) {
     a->item_size = item_size;
     a->len = 0;
     a->size = init_size;
-    a->data = bs_calloc(a->item_size, a->size);
+    a->data = bs_malloc(a->size * a->item_size);
     a->clearfunc = NULL;
     a->tmpitem = bs_malloc(a->item_size);
     return a;
@@ -46,6 +46,13 @@ void bs_array_free(BSArray *a) {
     bs_free(a->data);
     bs_free(a->tmpitem);
     bs_free(a);
+}
+
+void bs_array_resize(BSArray *a, size_t new_size) {
+    a->size = new_size;
+    if (a->len > a->size)
+        a->len = a->size;
+    a->data = bs_realloc(a->data, a->size * a->item_size);
 }
 
 void bs_array_set_clear_func(BSArray *a, BSDestroyFunc clearfunc) {

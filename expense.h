@@ -26,6 +26,7 @@ typedef struct {
 
 Context *create_context();
 void free_context(Context *ctx);
+void print_context(Context *ctx);
 
 BSArray *new_xps();
 int load_expense_file(Context *ctx, const char *xpfile);

@@ -33,6 +33,7 @@ typedef struct {
 BSArray *bs_array_new(size_t item_size, size_t init_size);
 void bs_array_clear(BSArray *a);
 void bs_array_free(BSArray *a);
+void bs_array_resize(BSArray *a, size_t new_size);
 void bs_array_set_clear_func(BSArray *a, BSDestroyFunc clearfunc);
 void bs_array_append(BSArray *a, void *item);
 void *bs_array_get(BSArray *a, uint i);
