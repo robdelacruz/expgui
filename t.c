@@ -18,7 +18,7 @@ static GtkWidget *create_expenses_treeview();
 static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
 static void file_open(GtkWidget *w, gpointer data);
-static void txtfilter_changed(GtkWidget *txtfilter, gpointer data);
+static void filter_changed(GtkWidget *txtfilter, gpointer data);
 
 int main(int argc, char *argv[]) {
     ExpContext *ctx;
@@ -60,8 +60,10 @@ static void setupui(ExpContext *ctx) {
     GtkWidget *menubar;
     GtkWidget *notebook;
     GtkWidget *tv_xps;
-    GtkWidget *sw_expenses;
-    GtkWidget *txtfilter;
+    GtkWidget *sw_xps;
+    GtkWidget *txt_filter;
+    GtkWidget *cb_month;
+    GtkWidget *cb_year;
     GtkWidget *vbox1;
     GtkWidget *hbox1;
 
@@ -74,33 +76,51 @@ static void setupui(ExpContext *ctx) {
 
     menubar = create_menubar(ctx, mainwin);
 
-    // hbox1: txtfilter
-    hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    txtfilter = gtk_entry_new();
-    gtk_entry_set_placeholder_text(GTK_ENTRY(txtfilter), "Filter Expenses");
-    gtk_box_pack_start(GTK_BOX(hbox1), txtfilter, FALSE, FALSE, 0);
+    // Filter section
+    hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    txt_filter = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(txt_filter), "Filter Expenses");
+    cb_year = gtk_combo_box_text_new();
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2016");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2017");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2018");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2019");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2020");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2021");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2022");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2023");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(cb_year), 0);
+    cb_month = gtk_combo_box_text_new();
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_month), "January");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_month), "February");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_month), "March");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(cb_month), 0);
+    gtk_box_pack_start(GTK_BOX(hbox1), txt_filter, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox1), cb_year, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox1), cb_month, FALSE, FALSE, 0);
 
-    // notebook: sw_expenses
     notebook = gtk_notebook_new();
     gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_BOTTOM);
 
-    sw_expenses = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw_expenses), GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
+    // Expenses list
+    sw_xps = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw_xps), GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
     tv_xps = create_expenses_treeview();
-    gtk_container_add(GTK_CONTAINER(sw_expenses), tv_xps);
+    gtk_container_add(GTK_CONTAINER(sw_xps), tv_xps);
 
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sw_expenses, gtk_label_new("Expenses"));
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sw_xps, gtk_label_new("Expenses"));
 
-    // vbox1: menubar, hbox1, notebook
+    // Main window
     vbox1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
     gtk_box_pack_start(GTK_BOX(vbox1), menubar, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox1), hbox1, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox1), notebook, TRUE, TRUE, 0);
-
     gtk_container_add(GTK_CONTAINER(mainwin), vbox1);
     gtk_widget_show_all(mainwin);
 
-    g_signal_connect(txtfilter, "changed", G_CALLBACK(txtfilter_changed), ctx);
+    g_signal_connect(txt_filter, "changed", G_CALLBACK(filter_changed), ctx);
+
+    gtk_widget_grab_focus(tv_xps);
 
     ctx->mainwin = mainwin;
     ctx->menubar = menubar;
@@ -208,7 +228,7 @@ exit:
     gtk_widget_destroy(dlg);
 }
 
-static void txtfilter_changed(GtkWidget *txtfilter, gpointer data) {
+static void filter_changed(GtkWidget *txtfilter, gpointer data) {
     const gchar *sfilter = gtk_entry_get_text(GTK_ENTRY(txtfilter));
     printf("sfilter: '%s'\n", sfilter);
 }

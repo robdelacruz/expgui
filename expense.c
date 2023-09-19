@@ -17,7 +17,7 @@ static char *skip_ws(char *startp);
 static char *read_field(char *startp, char **field);
 static char *read_field_double(char *startp, double *field);
 static void read_expense_line(char *buf, Expense *xp);
-static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps);
+static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_cursor);
 
 ExpContext *create_context() {
     ExpContext *ctx = bs_malloc(sizeof(ExpContext));
@@ -111,7 +111,7 @@ int load_expense_file(ExpContext *ctx, const char *xpfile) {
     ctx->xpfile = strdup(xpfile);
     ctx->xps = xps;
 
-    refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->xps);
+    refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->xps, TRUE);
 
     return 0;
 }
@@ -184,9 +184,10 @@ void print_expenselines(BSArray *xps) {
     }
 }
 
-static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps) {
+static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_cursor) {
     GtkListStore *ls;
     GtkTreeIter it;
+    GtkTreePath *tp;
 
     ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(tv)));
     assert(ls != NULL);
@@ -197,6 +198,12 @@ static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps) {
         Expense *xp = bs_array_get(xps, i);
         gtk_list_store_append(ls, &it);
         gtk_list_store_set(ls, &it, 0, xp->date, 1, xp->desc, 2, xp->amt, 3, xp->cat, -1);
+    }
+
+    if (reset_cursor) {
+        tp = gtk_tree_path_new_from_string("0");
+        gtk_tree_view_set_cursor(GTK_TREE_VIEW(tv), tp, NULL, FALSE);
+        gtk_tree_path_free(tp);
     }
 }
 
