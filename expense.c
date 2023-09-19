@@ -19,8 +19,8 @@ static char *read_field_double(char *startp, double *field);
 static void read_expense_line(char *buf, Expense *xp);
 static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps);
 
-Context *create_context() {
-    Context *ctx = bs_malloc(sizeof(Context));
+ExpContext *create_context() {
+    ExpContext *ctx = bs_malloc(sizeof(ExpContext));
 
     ctx->xpfile = NULL;
     ctx->xps = NULL;
@@ -34,7 +34,7 @@ Context *create_context() {
     return ctx;
 }
 
-void free_context(Context *ctx) {
+void free_context(ExpContext *ctx) {
     if (ctx->xpfile)
         free(ctx->xpfile);
     if (ctx->xps)
@@ -42,8 +42,8 @@ void free_context(Context *ctx) {
     free(ctx);
 }
 
-void print_context(Context *ctx) {
-    printf("Context:\n");
+void print_context(ExpContext *ctx) {
+    printf("ExpContext:\n");
     printf("xpfile: '%s'\n", ctx->xpfile);
     printf("filter_month: %d\n", ctx->filter_month);
     printf("filter_year: %d\n", ctx->filter_year);
@@ -67,7 +67,7 @@ static void clear_expense(void *xp) {
         free(p->cat);
 }
 
-int load_expense_file(Context *ctx, const char *xpfile) {
+int load_expense_file(ExpContext *ctx, const char *xpfile) {
     Expense xp;
     FILE *f;
     char *buf;

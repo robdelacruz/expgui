@@ -12,15 +12,16 @@
 void quit(const char *s);
 void print_error(const char *s);
 void panic(const char *s);
-static void setupui(Context *ctx);
-static GtkWidget *create_menubar(Context *ctx, GtkWidget *mainwin);
+static void setupui(ExpContext *ctx);
+static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin);
 static GtkWidget *create_expenses_treeview();
 static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
 static void file_open(GtkWidget *w, gpointer data);
+static void txtfilter_changed(GtkWidget *txtfilter, gpointer data);
 
 int main(int argc, char *argv[]) {
-    Context *ctx;
+    ExpContext *ctx;
 
     ctx = create_context();
     gtk_init(&argc, &argv);
@@ -54,40 +55,52 @@ void panic(const char *s) {
     exit(1);
 }
 
-static void setupui(Context *ctx) {
+static void setupui(ExpContext *ctx) {
     GtkWidget *mainwin;
     GtkWidget *menubar;
     GtkWidget *notebook;
     GtkWidget *tv_xps;
     GtkWidget *sw_expenses;
-    GtkWidget *vbox;
+    GtkWidget *txtfilter;
+    GtkWidget *vbox1;
+    GtkWidget *hbox1;
 
-    // window
+    // mainwin
     mainwin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(mainwin), "gtktest");
-    gtk_window_set_default_size(GTK_WINDOW(mainwin), 640, 300);
+    gtk_window_set_default_size(GTK_WINDOW(mainwin), 640, 480);
     gtk_container_set_border_width(GTK_CONTAINER(mainwin), 10);
     g_signal_connect(mainwin, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
     menubar = create_menubar(ctx, mainwin);
+
+    // hbox1: txtfilter
+    hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    txtfilter = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(txtfilter), "Filter Expenses");
+    gtk_box_pack_start(GTK_BOX(hbox1), txtfilter, FALSE, FALSE, 0);
+
+    // notebook: sw_expenses
+    notebook = gtk_notebook_new();
+    gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_BOTTOM);
 
     sw_expenses = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw_expenses), GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
     tv_xps = create_expenses_treeview();
     gtk_container_add(GTK_CONTAINER(sw_expenses), tv_xps);
 
-    // notebook: sw_expenses
-    notebook = gtk_notebook_new();
-    gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_BOTTOM);
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sw_expenses, gtk_label_new("Expenses"));
 
-    // vbox: menubar, notebook
-    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), menubar, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
+    // vbox1: menubar, hbox1, notebook
+    vbox1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_box_pack_start(GTK_BOX(vbox1), menubar, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox1), hbox1, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox1), notebook, TRUE, TRUE, 0);
 
-    gtk_container_add(GTK_CONTAINER(mainwin), vbox);
+    gtk_container_add(GTK_CONTAINER(mainwin), vbox1);
     gtk_widget_show_all(mainwin);
+
+    g_signal_connect(txtfilter, "changed", G_CALLBACK(txtfilter_changed), ctx);
 
     ctx->mainwin = mainwin;
     ctx->menubar = menubar;
@@ -95,7 +108,7 @@ static void setupui(Context *ctx) {
     ctx->tv_xps = tv_xps;
 }
 
-static GtkWidget *create_menubar(Context *ctx, GtkWidget *mainwin) {
+static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin) {
     GtkWidget *menubar;
     GtkWidget *filemenu, *mi_file, *mi_file_new, *mi_file_open, *mi_file_quit;
     GtkAccelGroup *accel;
@@ -167,9 +180,36 @@ static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeMode
 }
 
 static void file_open(GtkWidget *w, gpointer data) {
-    Context *ctx = data;
-    print_context(ctx);
+    ExpContext *ctx = data;
+    GtkWidget *dlg;
+    gchar *xpfile;
+    gint z;
 
-    load_expense_file(ctx, "expenses");
+    dlg = gtk_file_chooser_dialog_new("Open Expense File", GTK_WINDOW(ctx->mainwin),
+                                      GTK_FILE_CHOOSER_ACTION_OPEN,
+                                      "Open", GTK_RESPONSE_ACCEPT,
+                                      "Cancel", GTK_RESPONSE_CANCEL,
+                                      NULL);
+    z = gtk_dialog_run(GTK_DIALOG(dlg));
+    if (z != GTK_RESPONSE_ACCEPT)
+        goto exit;
+
+    xpfile = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dlg));
+    if (xpfile == NULL)
+        goto exit;
+
+    printf("Opening '%s'\n", xpfile);
+    z = load_expense_file(ctx, xpfile);
+    if (z != 0)
+        print_error("Error reading expense file");
+    g_free(xpfile);
+
+exit:
+    gtk_widget_destroy(dlg);
+}
+
+static void txtfilter_changed(GtkWidget *txtfilter, gpointer data) {
+    const gchar *sfilter = gtk_entry_get_text(GTK_ENTRY(txtfilter));
+    printf("sfilter: '%s'\n", sfilter);
 }
 

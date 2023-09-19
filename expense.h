@@ -22,14 +22,14 @@ typedef struct {
     GtkWidget *menubar;
     GtkWidget *notebook;
     GtkWidget *tv_xps;
-} Context;
+} ExpContext;
 
-Context *create_context();
-void free_context(Context *ctx);
-void print_context(Context *ctx);
+ExpContext *create_context();
+void free_context(ExpContext *ctx);
+void print_context(ExpContext *ctx);
 
 BSArray *new_xps();
-int load_expense_file(Context *ctx, const char *xpfile);
+int load_expense_file(ExpContext *ctx, const char *xpfile);
 void sort_expenses_bydate(BSArray *xps);
 void print_expenselines(BSArray *xps);
 
