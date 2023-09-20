@@ -126,6 +126,8 @@ static void setupui(ExpContext *ctx) {
     gtk_widget_show_all(mainwin);
 
     g_signal_connect(txt_filter, "changed", G_CALLBACK(filter_changed), ctx);
+    g_signal_connect(cb_month, "changed", G_CALLBACK(filter_changed), ctx);
+    g_signal_connect(cb_year, "changed", G_CALLBACK(filter_changed), ctx);
 
     gtk_widget_grab_focus(tv_xps);
 
@@ -134,6 +136,8 @@ static void setupui(ExpContext *ctx) {
     ctx->notebook = notebook;
     ctx->tv_xps = tv_xps;
     ctx->txt_filter = txt_filter;
+    ctx->cb_year = cb_year;
+    ctx->cb_month = cb_month;
 }
 
 static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin) {
@@ -242,7 +246,7 @@ exit:
     gtk_widget_destroy(dlg);
 }
 
-static void filter_changed(GtkWidget *txtfilter, gpointer data) {
+static void filter_changed(GtkWidget *w, gpointer data) {
     ExpContext *ctx = data;
 
     // Cancel previous timeout event.
@@ -254,10 +258,19 @@ static void filter_changed(GtkWidget *txtfilter, gpointer data) {
 
 static gboolean process_filter(gpointer data) {
     ExpContext *ctx = data;
-    const gchar *sfilter = gtk_entry_get_text(GTK_ENTRY(ctx->txt_filter));
-    printf("sfilter: '%s'\n", sfilter);
+    const gchar *sfilter;
+    gchar *syear;
+    gchar *smonth;
+    int year, month;
 
-    filter_xps(ctx->xps, ctx->filtered_xps, sfilter, 0, 0);
+    sfilter = gtk_entry_get_text(GTK_ENTRY(ctx->txt_filter));
+    syear = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(ctx->cb_year));
+    smonth = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(ctx->cb_month));
+    year = atoi(syear);
+    month = atoi(smonth);
+    printf("sfilter: '%s', year: %d, month: %d\n", sfilter, year, month);
+
+    filter_xps(ctx->xps, ctx->filtered_xps, sfilter, month, year);
     refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->filtered_xps, TRUE);
 
     ctx->filter_keysourceid = 0;
@@ -277,7 +290,7 @@ static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_c
     for (int i=0; i < xps->len; i++) {
         Expense *xp = bs_array_get(xps, i);
         gtk_list_store_append(ls, &it);
-        gtk_list_store_set(ls, &it, 0, xp->date, 1, xp->desc, 2, xp->amt, 3, xp->cat, -1);
+        gtk_list_store_set(ls, &it, 0, xp->dt->s, 1, xp->desc, 2, xp->amt, 3, xp->cat, -1);
     }
 
     if (reset_cursor) {

@@ -61,5 +61,18 @@ void bs_string_append(BSString *str, char *s);
 void bs_string_append_sprintf(BSString *str, char *fmt, ...);
 void bs_string_append_char(BSString *str, char c);
 
+
+/*** BSDate ***/
+typedef struct {
+    char *s;
+    uint month;
+    uint day;
+    uint year;
+} BSDate;
+
+BSDate *bs_date_new(uint month, uint day, uint year);
+BSDate *bs_date_iso_new(char *s);
+void bs_date_free(BSDate *dt);
+
 #endif
 

@@ -33,6 +33,8 @@ ExpContext *create_context() {
     ctx->notebook = NULL;
     ctx->tv_xps = NULL;
     ctx->txt_filter = NULL;
+    ctx->cb_year = NULL;
+    ctx->cb_month = NULL;
 
     return ctx;
 }
@@ -62,8 +64,8 @@ BSArray *new_xps() {
 
 static void clear_expense(void *xp) {
     Expense *p = xp;
-    if (p->date)
-        free(p->date);
+    if (p->dt)
+        bs_date_free(p->dt);
     if (p->time)
         free(p->time);
     if (p->desc)
@@ -142,6 +144,14 @@ static char *read_field(char *startp, char **field) {
     return p;
 }
 
+static char *read_field_date(char *startp, BSDate **dt) {
+    char *sfield;
+    char *p = read_field(startp, &sfield);
+    *dt = bs_date_iso_new(sfield);
+    bs_free(sfield);
+    return p;
+}
+
 static char *read_field_double(char *startp, double *field) {
     char *sfield;
     char *p = read_field(startp, &sfield);
@@ -155,7 +165,7 @@ static void read_expense_line(char *buf, Expense *xp) {
     // 2016-05-01; 00:00; Mochi Cream coffee; 100.00; coffee
 
     char *p = buf;
-    p = read_field(p, &xp->date);
+    p = read_field_date(p, &xp->dt);
     p = read_field(p, &xp->time);
     p = read_field(p, &xp->desc);
     p = read_field_double(p, &xp->amt);
@@ -165,7 +175,7 @@ static void read_expense_line(char *buf, Expense *xp) {
 static int compare_expense_date(void *xp1, void *xp2) {
     Expense *p1 = (Expense *)xp1;
     Expense *p2 = (Expense *)xp2;
-    return strcmp(p1->date, p2->date);
+    return strcmp(p1->dt->s, p2->dt->s);
 }
 
 void sort_expenses_bydate(BSArray *xps) {
@@ -175,7 +185,7 @@ void sort_expenses_bydate(BSArray *xps) {
 void print_expenselines(BSArray *xps) {
     for (int i=0; i < xps->len; i++) {
         Expense *xp = bs_array_get(xps, i);
-        printf("%d: %-12s %-35s %9.2f  %-15s\n", i, xp->date, xp->desc, xp->amt, xp->cat);
+        printf("%d: %-12s %-35s %9.2f  %-15s\n", i, xp->dt->s, xp->desc, xp->amt, xp->cat);
     }
 }
 
@@ -184,10 +194,15 @@ void filter_xps(BSArray *src_xps, BSArray *dest_xps, const char *filter, uint mo
 
     for (int i=0; i < src_xps->len; i++) {
         Expense *xp = bs_array_get(src_xps, i);
-        //$$todo: filter by month and year
 
-        if (strcasestr(xp->desc, filter) != NULL)
-            bs_array_append(dest_xps, xp);
+        if (month != 0 && xp->dt->month != month)
+            continue;
+        if (year != 0 && xp->dt->year != year)
+            continue;
+        if (strcasestr(xp->desc, filter) == NULL)
+            continue;
+
+        bs_array_append(dest_xps, xp);
     }
 }
 

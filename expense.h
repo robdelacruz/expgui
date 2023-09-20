@@ -5,7 +5,7 @@
 #include "bslib.h"
 
 typedef struct {
-    char *date;
+    BSDate *dt;
     char *time;
     char *desc;
     double amt;
@@ -25,6 +25,8 @@ typedef struct {
     GtkWidget *notebook;
     GtkWidget *tv_xps;
     GtkWidget *txt_filter;
+    GtkWidget *cb_year;
+    GtkWidget *cb_month;
 } ExpContext;
 
 ExpContext *create_context();

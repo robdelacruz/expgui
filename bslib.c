@@ -264,3 +264,79 @@ void bs_string_append_char(BSString *str, char c) {
 }
 
 
+/*** BSDate ***/
+static int is_valid_date(uint month, uint day, uint year) {
+    if (month < 1 || month > 12)
+        return 0;
+    if (day < 1 || day > 31)
+        return 0;
+    if (year > 9999)
+        return 0;
+    return 1;
+}
+
+BSDate *bs_date_new(uint month, uint day, uint year) {
+    BSDate *dt;
+    char buf[11];
+
+    dt = bs_malloc(sizeof(BSDate));
+
+    if (!is_valid_date(month, day, year)) {
+        dt->year = 1970;
+        dt->month = 1;
+        dt->day = 1;
+        dt->s = bs_strdup("1970-01-01");
+        return dt;
+    };
+
+    dt->month = month;
+    dt->day = day;
+    dt->year = year;
+    sprintf(buf, "%02d/%02d/%04d", month, day, year);
+    dt->s = bs_strdup(buf);
+
+    return dt;
+}
+
+BSDate *bs_date_iso_new(char *s) {
+    BSDate *dt;
+    char buf[11];
+    uint month, day, year;
+
+    dt = bs_malloc(sizeof(BSDate));
+
+    // s should be yyyy-mm-dd format
+    if (strlen(s) != 10)
+        goto error;
+    if (s[4] != '-' && s[7] != '-')
+        goto error;
+
+    strcpy(buf, s);
+    buf[4] = 0;
+    buf[7] = 0;
+    year = atoi(buf+0);
+    month = atoi(buf+5);
+    day = atoi(buf+8);
+
+    if (!is_valid_date(month, day, year))
+        goto error;
+
+    dt->year = year;
+    dt->month = month;
+    dt->day = day;
+    dt->s = bs_strdup(s);
+    return dt;
+
+error:
+    dt->year = 1970;
+    dt->month = 1;
+    dt->day = 1;
+    dt->s = bs_strdup("1970-01-01");
+    return dt;
+}
+
+void bs_date_free(BSDate *dt) {
+    bs_free(dt->s);
+    bs_free(dt);
+}
+
