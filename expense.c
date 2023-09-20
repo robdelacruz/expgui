@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,19 +18,21 @@ static char *skip_ws(char *startp);
 static char *read_field(char *startp, char **field);
 static char *read_field_double(char *startp, double *field);
 static void read_expense_line(char *buf, Expense *xp);
-static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_cursor);
 
 ExpContext *create_context() {
     ExpContext *ctx = bs_malloc(sizeof(ExpContext));
 
-    ctx->xpfile = NULL;
-    ctx->xps = NULL;
+    ctx->xpfile = strdup("");
+    ctx->xps = new_xps();
+    ctx->filtered_xps = bs_array_type_new(Expense, 0);
     ctx->filter_month = 1;
     ctx->filter_year = 1970;
+    ctx->filter_keysourceid = 0;
     ctx->mainwin = NULL;
     ctx->menubar = NULL;
     ctx->notebook = NULL;
     ctx->tv_xps = NULL;
+    ctx->txt_filter = NULL;
 
     return ctx;
 }
@@ -39,6 +42,8 @@ void free_context(ExpContext *ctx) {
         free(ctx->xpfile);
     if (ctx->xps)
         bs_array_free(ctx->xps);
+    if (ctx->filtered_xps)
+        bs_array_free(ctx->filtered_xps);
     free(ctx);
 }
 
@@ -67,7 +72,8 @@ static void clear_expense(void *xp) {
         free(p->cat);
 }
 
-int load_expense_file(ExpContext *ctx, const char *xpfile) {
+// Return 0 for success, 1 for failure with errno set.
+int load_expense_file(const char *xpfile, BSArray *xps) {
     Expense xp;
     FILE *f;
     char *buf;
@@ -78,7 +84,7 @@ int load_expense_file(ExpContext *ctx, const char *xpfile) {
     if (f == NULL)
         return 1;
 
-    BSArray *xps = new_xps();
+    bs_array_clear(xps);
     buf = malloc(BUFLINE_SIZE);
     buf_size = BUFLINE_SIZE;
 
@@ -89,7 +95,7 @@ int load_expense_file(ExpContext *ctx, const char *xpfile) {
             printf("error: z:%d\n", z);
             free(buf);
             fclose(f);
-            bs_array_free(xps);
+            bs_array_clear(xps);
             return 1;
         }
         if (z == -1)
@@ -102,17 +108,6 @@ int load_expense_file(ExpContext *ctx, const char *xpfile) {
 
     free(buf);
     fclose(f);
-
-    if (ctx->xpfile)
-        free(ctx->xpfile);
-    if (ctx->xps)
-        bs_array_free(ctx->xps);
-
-    ctx->xpfile = strdup(xpfile);
-    ctx->xps = xps;
-
-    refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->xps, TRUE);
-
     return 0;
 }
 
@@ -184,26 +179,15 @@ void print_expenselines(BSArray *xps) {
     }
 }
 
-static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_cursor) {
-    GtkListStore *ls;
-    GtkTreeIter it;
-    GtkTreePath *tp;
+void filter_xps(BSArray *src_xps, BSArray *dest_xps, const char *filter, uint month, uint year) {
+    bs_array_clear(dest_xps);
 
-    ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(tv)));
-    assert(ls != NULL);
+    for (int i=0; i < src_xps->len; i++) {
+        Expense *xp = bs_array_get(src_xps, i);
+        //$$todo: filter by month and year
 
-    gtk_list_store_clear(ls);
-
-    for (int i=0; i < xps->len; i++) {
-        Expense *xp = bs_array_get(xps, i);
-        gtk_list_store_append(ls, &it);
-        gtk_list_store_set(ls, &it, 0, xp->date, 1, xp->desc, 2, xp->amt, 3, xp->cat, -1);
-    }
-
-    if (reset_cursor) {
-        tp = gtk_tree_path_new_from_string("0");
-        gtk_tree_view_set_cursor(GTK_TREE_VIEW(tv), tp, NULL, FALSE);
-        gtk_tree_path_free(tp);
+        if (strcasestr(xp->desc, filter) != NULL)
+            bs_array_append(dest_xps, xp);
     }
 }
 

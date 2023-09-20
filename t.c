@@ -19,6 +19,8 @@ static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeMode
 
 static void file_open(GtkWidget *w, gpointer data);
 static void filter_changed(GtkWidget *txtfilter, gpointer data);
+static gboolean process_filter(gpointer data);
+static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_cursor);
 
 int main(int argc, char *argv[]) {
     ExpContext *ctx;
@@ -28,9 +30,14 @@ int main(int argc, char *argv[]) {
     setupui(ctx);
 
     if (argc > 1) {
-        int z = load_expense_file(ctx, argv[1]);
+        int z = load_expense_file(argv[1], ctx->xps);
         if (z != 0)
             panic("Error loading expense file");
+
+        free(ctx->xpfile);
+        ctx->xpfile = strdup(argv[1]);
+        filter_xps(ctx->xps, ctx->filtered_xps, "", 0, 0);
+        refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->filtered_xps, TRUE);
     }
 
     gtk_main();
@@ -126,6 +133,7 @@ static void setupui(ExpContext *ctx) {
     ctx->menubar = menubar;
     ctx->notebook = notebook;
     ctx->tv_xps = tv_xps;
+    ctx->txt_filter = txt_filter;
 }
 
 static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin) {
@@ -219,9 +227,15 @@ static void file_open(GtkWidget *w, gpointer data) {
         goto exit;
 
     printf("Opening '%s'\n", xpfile);
-    z = load_expense_file(ctx, xpfile);
+    z = load_expense_file(xpfile, ctx->xps);
     if (z != 0)
         print_error("Error reading expense file");
+
+    free(ctx->xpfile);
+    ctx->xpfile = strdup(xpfile);
+    filter_xps(ctx->xps, ctx->filtered_xps, "", 0, 0);
+    refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->filtered_xps, TRUE);
+
     g_free(xpfile);
 
 exit:
@@ -229,7 +243,48 @@ exit:
 }
 
 static void filter_changed(GtkWidget *txtfilter, gpointer data) {
-    const gchar *sfilter = gtk_entry_get_text(GTK_ENTRY(txtfilter));
-    printf("sfilter: '%s'\n", sfilter);
+    ExpContext *ctx = data;
+
+    // Cancel previous timeout event.
+    if (ctx->filter_keysourceid != 0)
+        g_source_remove(ctx->filter_keysourceid);
+
+    ctx->filter_keysourceid = g_timeout_add(200, process_filter, data);
 }
+
+static gboolean process_filter(gpointer data) {
+    ExpContext *ctx = data;
+    const gchar *sfilter = gtk_entry_get_text(GTK_ENTRY(ctx->txt_filter));
+    printf("sfilter: '%s'\n", sfilter);
+
+    filter_xps(ctx->xps, ctx->filtered_xps, sfilter, 0, 0);
+    refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->filtered_xps, TRUE);
+
+    ctx->filter_keysourceid = 0;
+    return G_SOURCE_REMOVE;
+}
+
+static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_cursor) {
+    GtkListStore *ls;
+    GtkTreeIter it;
+    GtkTreePath *tp;
+
+    ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(tv)));
+    assert(ls != NULL);
+
+    gtk_list_store_clear(ls);
+
+    for (int i=0; i < xps->len; i++) {
+        Expense *xp = bs_array_get(xps, i);
+        gtk_list_store_append(ls, &it);
+        gtk_list_store_set(ls, &it, 0, xp->date, 1, xp->desc, 2, xp->amt, 3, xp->cat, -1);
+    }
+
+    if (reset_cursor) {
+        tp = gtk_tree_path_new_from_string("0");
+        gtk_tree_view_set_cursor(GTK_TREE_VIEW(tv), tp, NULL, FALSE);
+        gtk_tree_path_free(tp);
+    }
+}
+
 
