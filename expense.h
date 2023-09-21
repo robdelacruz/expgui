@@ -35,7 +35,8 @@ void print_context(ExpContext *ctx);
 
 BSArray *new_xps();
 int load_expense_file(const char *xpfile, BSArray *xps);
-void sort_expenses_bydate(BSArray *xps);
+void sort_expenses_bydate_asc(BSArray *xps);
+void sort_expenses_bydate_desc(BSArray *xps);
 void print_expenselines(BSArray *xps);
 void filter_xps(BSArray *src_xps, BSArray *dest_xps, const char *filter, uint month, uint year);
 

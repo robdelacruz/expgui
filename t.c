@@ -17,31 +17,29 @@ static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin);
 static GtkWidget *create_expenses_treeview();
 static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
-static void file_open(GtkWidget *w, gpointer data);
-static void filter_changed(GtkWidget *txtfilter, gpointer data);
+static int open_xpfile(ExpContext *ctx, char *xpfile);
 static gboolean process_filter(gpointer data);
 static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_cursor);
 
+static void file_open(GtkWidget *w, gpointer data);
+static void txt_filter_changed(GtkWidget *w, gpointer data);
+static void cb_filter_changed(GtkWidget *w, gpointer data);
+
 int main(int argc, char *argv[]) {
     ExpContext *ctx;
+    int z;
 
     ctx = create_context();
     gtk_init(&argc, &argv);
     setupui(ctx);
 
     if (argc > 1) {
-        int z = load_expense_file(argv[1], ctx->xps);
+        z = open_xpfile(ctx, argv[1]);
         if (z != 0)
-            panic("Error loading expense file");
-
-        free(ctx->xpfile);
-        ctx->xpfile = strdup(argv[1]);
-        filter_xps(ctx->xps, ctx->filtered_xps, "", 0, 0);
-        refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->filtered_xps, TRUE);
+            print_error("Error reading expense file");
     }
 
     gtk_main();
-
     free_context(ctx);
     return 0;
 }
@@ -125,9 +123,9 @@ static void setupui(ExpContext *ctx) {
     gtk_container_add(GTK_CONTAINER(mainwin), vbox1);
     gtk_widget_show_all(mainwin);
 
-    g_signal_connect(txt_filter, "changed", G_CALLBACK(filter_changed), ctx);
-    g_signal_connect(cb_month, "changed", G_CALLBACK(filter_changed), ctx);
-    g_signal_connect(cb_year, "changed", G_CALLBACK(filter_changed), ctx);
+    g_signal_connect(txt_filter, "changed", G_CALLBACK(txt_filter_changed), ctx);
+    g_signal_connect(cb_month, "changed", G_CALLBACK(cb_filter_changed), ctx);
+    g_signal_connect(cb_year, "changed", G_CALLBACK(cb_filter_changed), ctx);
 
     gtk_widget_grab_focus(tv_xps);
 
@@ -215,7 +213,7 @@ static void file_open(GtkWidget *w, gpointer data) {
     ExpContext *ctx = data;
     GtkWidget *dlg;
     gchar *xpfile;
-    gint z;
+    int z;
 
     dlg = gtk_file_chooser_dialog_new("Open Expense File", GTK_WINDOW(ctx->mainwin),
                                       GTK_FILE_CHOOSER_ACTION_OPEN,
@@ -229,24 +227,45 @@ static void file_open(GtkWidget *w, gpointer data) {
     xpfile = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dlg));
     if (xpfile == NULL)
         goto exit;
-
-    printf("Opening '%s'\n", xpfile);
-    z = load_expense_file(xpfile, ctx->xps);
+    z = open_xpfile(ctx, xpfile);
     if (z != 0)
         print_error("Error reading expense file");
 
-    free(ctx->xpfile);
-    ctx->xpfile = strdup(xpfile);
-    filter_xps(ctx->xps, ctx->filtered_xps, "", 0, 0);
-    refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->filtered_xps, TRUE);
-
-    g_free(xpfile);
-
 exit:
+    if (xpfile != NULL)
+        g_free(xpfile);
     gtk_widget_destroy(dlg);
 }
 
-static void filter_changed(GtkWidget *w, gpointer data) {
+static int open_xpfile(ExpContext *ctx, char *xpfile) {
+    int z;
+
+    z = load_expense_file(xpfile, ctx->xps);
+    if (z != 0)
+        return z;
+    free(ctx->xpfile);
+    ctx->xpfile = strdup(xpfile);
+
+    sort_expenses_bydate_desc(ctx->xps);
+    filter_xps(ctx->xps, ctx->filtered_xps, "", 0, 0);
+    refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->filtered_xps, TRUE);
+
+    return 0;
+}
+
+static void cb_filter_changed(GtkWidget *w, gpointer data) {
+    ExpContext *ctx = data;
+
+    // Cancel previous timeout event.
+    if (ctx->filter_keysourceid != 0) {
+        g_source_remove(ctx->filter_keysourceid);
+        ctx->filter_keysourceid = 0;
+    }
+
+    process_filter(data);
+}
+
+static void txt_filter_changed(GtkWidget *w, gpointer data) {
     ExpContext *ctx = data;
 
     // Cancel previous timeout event.

@@ -172,14 +172,21 @@ static void read_expense_line(char *buf, Expense *xp) {
     p = read_field(p, &xp->cat);
 }
 
-static int compare_expense_date(void *xp1, void *xp2) {
+static int compare_expense_date_asc(void *xp1, void *xp2) {
     Expense *p1 = (Expense *)xp1;
     Expense *p2 = (Expense *)xp2;
     return strcmp(p1->dt->s, p2->dt->s);
 }
-
-void sort_expenses_bydate(BSArray *xps) {
-    bs_array_sort(xps, compare_expense_date);
+static int compare_expense_date_desc(void *xp1, void *xp2) {
+    Expense *p1 = (Expense *)xp1;
+    Expense *p2 = (Expense *)xp2;
+    return strcmp(p2->dt->s, p1->dt->s);
+}
+void sort_expenses_bydate_asc(BSArray *xps) {
+    bs_array_sort(xps, compare_expense_date_asc);
+}
+void sort_expenses_bydate_desc(BSArray *xps) {
+    bs_array_sort(xps, compare_expense_date_desc);
 }
 
 void print_expenselines(BSArray *xps) {
