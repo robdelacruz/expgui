@@ -68,6 +68,7 @@ void panic(const char *s) {
 static void setup_ui(ExpContext *ctx) {
     GtkWidget *mainwin;
     GtkWidget *menubar;
+    GtkWidget *statusbar;
     GtkWidget *notebook;
     GtkWidget *tv_xps;
     GtkWidget *sw_xps;
@@ -80,14 +81,20 @@ static void setup_ui(ExpContext *ctx) {
     // mainwin
     mainwin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(mainwin), "gtktest");
-    gtk_window_set_default_size(GTK_WINDOW(mainwin), 640, 480);
-    gtk_container_set_border_width(GTK_CONTAINER(mainwin), 10);
-    g_signal_connect(mainwin, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+//    gtk_window_set_default_size(GTK_WINDOW(mainwin), 640, 480);
+//    gtk_container_set_border_width(GTK_CONTAINER(mainwin), 10);
+    gtk_widget_set_size_request(mainwin, 800, 600);
 
     menubar = create_menubar(ctx, mainwin);
+    statusbar = gtk_statusbar_new();
+    gtk_widget_set_halign(statusbar, GTK_ALIGN_END);
+
+    guint statusid =  gtk_statusbar_get_context_id(GTK_STATUSBAR(statusbar), "info");
+    gtk_statusbar_push(GTK_STATUSBAR(statusbar), statusid, "Expense Buddy GUI");
 
     // Filter section
     hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    g_object_set(hbox1, "margin-start", 10, "margin-end", 10, NULL);
     txt_filter = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(txt_filter), "Filter Expenses");
     cb_year = gtk_combo_box_text_new();
@@ -100,8 +107,10 @@ static void setup_ui(ExpContext *ctx) {
     gtk_box_pack_start(GTK_BOX(hbox1), cb_year, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(hbox1), cb_month, FALSE, FALSE, 0);
 
+
     notebook = gtk_notebook_new();
     gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_BOTTOM);
+    g_object_set(notebook, "margin-start", 10, "margin-end", 10, NULL);
 
     // Expenses list
     sw_xps = gtk_scrolled_window_new(NULL, NULL);
@@ -116,9 +125,11 @@ static void setup_ui(ExpContext *ctx) {
     gtk_box_pack_start(GTK_BOX(vbox1), menubar, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox1), hbox1, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox1), notebook, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox1), statusbar, FALSE, FALSE, 0);
     gtk_container_add(GTK_CONTAINER(mainwin), vbox1);
     gtk_widget_show_all(mainwin);
 
+    g_signal_connect(mainwin, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     g_signal_connect(txt_filter, "changed", G_CALLBACK(txt_filter_changed), ctx);
     g_signal_connect(cb_year, "changed", G_CALLBACK(cb_year_changed), ctx);
     g_signal_connect(cb_month, "changed", G_CALLBACK(cb_month_changed), ctx);
