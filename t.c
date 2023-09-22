@@ -12,9 +12,10 @@
 void quit(const char *s);
 void print_error(const char *s);
 void panic(const char *s);
-static void setupui(ExpContext *ctx);
+static void setup_ui(ExpContext *ctx);
+static void refresh_filter_ui(ExpContext *ctx);
 static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin);
-static GtkWidget *create_expenses_treeview();
+static GtkWidget *create_xps_treeview();
 static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
 static int open_xpfile(ExpContext *ctx, char *xpfile);
@@ -23,7 +24,10 @@ static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_c
 
 static void file_open(GtkWidget *w, gpointer data);
 static void txt_filter_changed(GtkWidget *w, gpointer data);
-static void cb_filter_changed(GtkWidget *w, gpointer data);
+static void cb_year_changed(GtkWidget *w, gpointer data);
+static void cb_month_changed(GtkWidget *w, gpointer data);
+
+static char *month_names[] = {"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
 int main(int argc, char *argv[]) {
     ExpContext *ctx;
@@ -31,7 +35,7 @@ int main(int argc, char *argv[]) {
 
     ctx = create_context();
     gtk_init(&argc, &argv);
-    setupui(ctx);
+    setup_ui(ctx);
 
     if (argc > 1) {
         z = open_xpfile(ctx, argv[1]);
@@ -60,7 +64,7 @@ void panic(const char *s) {
     exit(1);
 }
 
-static void setupui(ExpContext *ctx) {
+static void setup_ui(ExpContext *ctx) {
     GtkWidget *mainwin;
     GtkWidget *menubar;
     GtkWidget *notebook;
@@ -86,19 +90,10 @@ static void setupui(ExpContext *ctx) {
     txt_filter = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(txt_filter), "Filter Expenses");
     cb_year = gtk_combo_box_text_new();
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2016");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2017");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2018");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2019");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2020");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2021");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2022");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "2023");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "All");
     gtk_combo_box_set_active(GTK_COMBO_BOX(cb_year), 0);
     cb_month = gtk_combo_box_text_new();
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_month), "January");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_month), "February");
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_month), "March");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_month), "All");
     gtk_combo_box_set_active(GTK_COMBO_BOX(cb_month), 0);
     gtk_box_pack_start(GTK_BOX(hbox1), txt_filter, TRUE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(hbox1), cb_year, FALSE, FALSE, 0);
@@ -110,7 +105,7 @@ static void setupui(ExpContext *ctx) {
     // Expenses list
     sw_xps = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw_xps), GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
-    tv_xps = create_expenses_treeview();
+    tv_xps = create_xps_treeview();
     gtk_container_add(GTK_CONTAINER(sw_xps), tv_xps);
 
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sw_xps, gtk_label_new("Expenses"));
@@ -124,8 +119,8 @@ static void setupui(ExpContext *ctx) {
     gtk_widget_show_all(mainwin);
 
     g_signal_connect(txt_filter, "changed", G_CALLBACK(txt_filter_changed), ctx);
-    g_signal_connect(cb_month, "changed", G_CALLBACK(cb_filter_changed), ctx);
-    g_signal_connect(cb_year, "changed", G_CALLBACK(cb_filter_changed), ctx);
+    g_signal_connect(cb_year, "changed", G_CALLBACK(cb_year_changed), ctx);
+    g_signal_connect(cb_month, "changed", G_CALLBACK(cb_month_changed), ctx);
 
     gtk_widget_grab_focus(tv_xps);
 
@@ -136,6 +131,30 @@ static void setupui(ExpContext *ctx) {
     ctx->txt_filter = txt_filter;
     ctx->cb_year = cb_year;
     ctx->cb_month = cb_month;
+}
+
+static void refresh_filter_ui(ExpContext *ctx) {
+    GtkComboBoxText *cb_year = GTK_COMBO_BOX_TEXT(ctx->cb_year);
+    GtkComboBoxText *cb_month = GTK_COMBO_BOX_TEXT(ctx->cb_month);
+    char syear[5];
+
+    gtk_combo_box_text_remove_all(cb_year);
+    gtk_combo_box_text_append_text(cb_year, "All");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(cb_year), 0);
+    for (int i=0; i < bs_countof(ctx->xps_years); i++) {
+        uint year = ctx->xps_years[i];
+        if (year == 0)
+            break;
+        snprintf(syear, sizeof(syear), "%d", year);
+        gtk_combo_box_text_append_text(cb_year, syear);
+    }
+
+    gtk_combo_box_text_remove_all(cb_month);
+    gtk_combo_box_text_append_text(cb_month, "All");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(cb_month), 0);
+    for (int i=1; i < bs_countof(month_names); i++) {
+        gtk_combo_box_text_append_text(cb_month, month_names[i]);
+    }
 }
 
 static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin) {
@@ -168,29 +187,41 @@ static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin) {
     return menubar;
 }
 
-static GtkWidget *create_expenses_treeview() {
+static GtkWidget *create_xps_treeview() {
     GtkWidget *tv;
     GtkCellRenderer *r;
     GtkTreeViewColumn *col;
     GtkListStore *ls;
+    int xpadding = 10;
+    int ypadding = 2;
 
     tv = gtk_tree_view_new();
 
     r = gtk_cell_renderer_text_new();
     col = gtk_tree_view_column_new_with_attributes("Date", r, "text", 0, NULL);
+    gtk_tree_view_column_set_resizable(col, TRUE);
+    gtk_cell_renderer_set_padding(r, xpadding, ypadding);
     gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
 
     r = gtk_cell_renderer_text_new();
     col = gtk_tree_view_column_new_with_attributes("Description", r, "text", 1, NULL);
+    gtk_tree_view_column_set_resizable(col, TRUE);
+    gtk_cell_renderer_set_padding(r, xpadding, ypadding);
+    gtk_tree_view_column_set_expand(col, TRUE);
     gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
 
     r = gtk_cell_renderer_text_new();
     col = gtk_tree_view_column_new_with_attributes("Amount", r, "text", 2, NULL);
+    gtk_tree_view_column_set_resizable(col, TRUE);
+    gtk_cell_renderer_set_padding(r, xpadding, ypadding);
+    gtk_cell_renderer_set_alignment(r, 1.0, 0);
     gtk_tree_view_column_set_cell_data_func(col, r, amt_datafunc, NULL, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
 
     r = gtk_cell_renderer_text_new();
     col = gtk_tree_view_column_new_with_attributes("Category", r, "text", 3, NULL);
+    gtk_tree_view_column_set_resizable(col, TRUE);
+    gtk_cell_renderer_set_padding(r, xpadding, ypadding);
     gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
 
     ls = gtk_list_store_new(4, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_FLOAT, G_TYPE_STRING);
@@ -240,59 +271,70 @@ exit:
 static int open_xpfile(ExpContext *ctx, char *xpfile) {
     int z;
 
-    z = load_expense_file(xpfile, ctx->xps);
+    z = load_xpfile(xpfile, ctx->xps);
     if (z != 0)
         return z;
     free(ctx->xpfile);
     ctx->xpfile = strdup(xpfile);
 
-    sort_expenses_bydate_desc(ctx->xps);
+    sort_xps_bydate_desc(ctx->xps);
+    get_xps_years(ctx->xps, ctx->xps_years, bs_countof(ctx->xps_years));
+    get_xps_months(ctx->xps, ctx->xps_months, bs_countof(ctx->xps_months));
+    refresh_filter_ui(ctx);
+
     filter_xps(ctx->xps, ctx->filtered_xps, "", 0, 0);
     refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->filtered_xps, TRUE);
 
     return 0;
 }
 
-static void cb_filter_changed(GtkWidget *w, gpointer data) {
+static void cb_year_changed(GtkWidget *w, gpointer data) {
     ExpContext *ctx = data;
+    gchar *syear;
+    int year = 0;
 
-    // Cancel previous timeout event.
-    if (ctx->filter_keysourceid != 0) {
-        g_source_remove(ctx->filter_keysourceid);
-        ctx->filter_keysourceid = 0;
-    }
+    syear = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(ctx->cb_year));
+    if (syear == NULL)
+        return;
+    year = atoi(syear);
+    if (year == ctx->filter_year)
+        return;
 
-    process_filter(data);
+    cancel_wait_id(&ctx->filter_wait_id);
+    ctx->filter_year = year;
+    process_filter(ctx);
+}
+
+static void cb_month_changed(GtkWidget *w, gpointer data) {
+    ExpContext *ctx = data;
+    int month = 0;
+
+    month = gtk_combo_box_get_active(GTK_COMBO_BOX(ctx->cb_month));
+    if (month == ctx->filter_month)
+        return;
+
+    cancel_wait_id(&ctx->filter_wait_id);
+    ctx->filter_month = month;
+    process_filter(ctx);
 }
 
 static void txt_filter_changed(GtkWidget *w, gpointer data) {
     ExpContext *ctx = data;
 
-    // Cancel previous timeout event.
-    if (ctx->filter_keysourceid != 0)
-        g_source_remove(ctx->filter_keysourceid);
-
-    ctx->filter_keysourceid = g_timeout_add(200, process_filter, data);
+    cancel_wait_id(&ctx->filter_wait_id);
+    ctx->filter_wait_id = g_timeout_add(200, process_filter, data);
 }
 
 static gboolean process_filter(gpointer data) {
     ExpContext *ctx = data;
     const gchar *sfilter;
-    gchar *syear;
-    gchar *smonth;
-    int year, month;
 
     sfilter = gtk_entry_get_text(GTK_ENTRY(ctx->txt_filter));
-    syear = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(ctx->cb_year));
-    smonth = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(ctx->cb_month));
-    year = atoi(syear);
-    month = atoi(smonth);
-    printf("sfilter: '%s', year: %d, month: %d\n", sfilter, year, month);
-
-    filter_xps(ctx->xps, ctx->filtered_xps, sfilter, month, year);
+    printf("filter: '%s', year: %d, month: %d\n", sfilter, ctx->filter_year, ctx->filter_month);
+    filter_xps(ctx->xps, ctx->filtered_xps, sfilter, ctx->filter_month, ctx->filter_year);
     refresh_treeview_xps(GTK_TREE_VIEW(ctx->tv_xps), ctx->filtered_xps, TRUE);
 
-    ctx->filter_keysourceid = 0;
+    ctx->filter_wait_id = 0;
     return G_SOURCE_REMOVE;
 }
 

@@ -17,7 +17,7 @@ static void chomp(char *buf);
 static char *skip_ws(char *startp);
 static char *read_field(char *startp, char **field);
 static char *read_field_double(char *startp, double *field);
-static void read_expense_line(char *buf, Expense *xp);
+static void read_xp_line(char *buf, Expense *xp);
 
 ExpContext *create_context() {
     ExpContext *ctx = bs_malloc(sizeof(ExpContext));
@@ -25,9 +25,10 @@ ExpContext *create_context() {
     ctx->xpfile = strdup("");
     ctx->xps = new_xps();
     ctx->filtered_xps = bs_array_type_new(Expense, 0);
-    ctx->filter_month = 1;
-    ctx->filter_year = 1970;
-    ctx->filter_keysourceid = 0;
+    ctx->filter_year = 0;
+    ctx->filter_month = 0;
+    ctx->filter_wait_id = 0;
+
     ctx->mainwin = NULL;
     ctx->menubar = NULL;
     ctx->notebook = NULL;
@@ -35,6 +36,9 @@ ExpContext *create_context() {
     ctx->txt_filter = NULL;
     ctx->cb_year = NULL;
     ctx->cb_month = NULL;
+
+    memset(ctx->xps_years, 0, sizeof(ctx->xps_years));
+    memset(ctx->xps_months, 0, sizeof(ctx->xps_months));
 
     return ctx;
 }
@@ -52,8 +56,6 @@ void free_context(ExpContext *ctx) {
 void print_context(ExpContext *ctx) {
     printf("ExpContext:\n");
     printf("xpfile: '%s'\n", ctx->xpfile);
-    printf("filter_month: %d\n", ctx->filter_month);
-    printf("filter_year: %d\n", ctx->filter_year);
 }
 
 BSArray *new_xps() {
@@ -75,7 +77,7 @@ static void clear_expense(void *xp) {
 }
 
 // Return 0 for success, 1 for failure with errno set.
-int load_expense_file(const char *xpfile, BSArray *xps) {
+int load_xpfile(const char *xpfile, BSArray *xps) {
     Expense xp;
     FILE *f;
     char *buf;
@@ -104,7 +106,7 @@ int load_expense_file(const char *xpfile, BSArray *xps) {
             break;
 
         chomp(buf);
-        read_expense_line(buf, &xp);
+        read_xp_line(buf, &xp);
         bs_array_append(xps, &xp);
     }
 
@@ -160,7 +162,7 @@ static char *read_field_double(char *startp, double *field) {
     return p;
 }
 
-static void read_expense_line(char *buf, Expense *xp) {
+static void read_xp_line(char *buf, Expense *xp) {
     // Sample expense line:
     // 2016-05-01; 00:00; Mochi Cream coffee; 100.00; coffee
 
@@ -172,24 +174,24 @@ static void read_expense_line(char *buf, Expense *xp) {
     p = read_field(p, &xp->cat);
 }
 
-static int compare_expense_date_asc(void *xp1, void *xp2) {
+static int compare_xp_date_asc(void *xp1, void *xp2) {
     Expense *p1 = (Expense *)xp1;
     Expense *p2 = (Expense *)xp2;
     return strcmp(p1->dt->s, p2->dt->s);
 }
-static int compare_expense_date_desc(void *xp1, void *xp2) {
+static int compare_xp_date_desc(void *xp1, void *xp2) {
     Expense *p1 = (Expense *)xp1;
     Expense *p2 = (Expense *)xp2;
     return strcmp(p2->dt->s, p1->dt->s);
 }
-void sort_expenses_bydate_asc(BSArray *xps) {
-    bs_array_sort(xps, compare_expense_date_asc);
+void sort_xps_bydate_asc(BSArray *xps) {
+    bs_array_sort(xps, compare_xp_date_asc);
 }
-void sort_expenses_bydate_desc(BSArray *xps) {
-    bs_array_sort(xps, compare_expense_date_desc);
+void sort_xps_bydate_desc(BSArray *xps) {
+    bs_array_sort(xps, compare_xp_date_desc);
 }
 
-void print_expenselines(BSArray *xps) {
+void print_xps_lines(BSArray *xps) {
     for (int i=0; i < xps->len; i++) {
         Expense *xp = bs_array_get(xps, i);
         printf("%d: %-12s %-35s %9.2f  %-15s\n", i, xp->dt->s, xp->desc, xp->amt, xp->cat);
@@ -210,6 +212,37 @@ void filter_xps(BSArray *src_xps, BSArray *dest_xps, const char *filter, uint mo
             continue;
 
         bs_array_append(dest_xps, xp);
+    }
+}
+
+void get_xps_years(BSArray *xps_desc, uint years[], size_t years_size) {
+    int lowest_year = 10000;
+    int j = 0;
+
+    for (int i=0; i < xps_desc->len; i++) {
+        Expense *xp = bs_array_get(xps_desc, i);
+        uint xp_year = xp->dt->year;
+        if (xp_year < lowest_year) {
+            years[j] = xp_year;
+            j++;
+            lowest_year = xp_year;
+        }
+
+        if (j >= years_size-1)
+            break;
+    }
+
+    years[j] = 0;
+}
+
+void get_xps_months(BSArray *xps_desc, uint months[], size_t months_size) {
+    months[0] = 0;
+}
+
+void cancel_wait_id(guint *wait_id) {
+    if (*wait_id != 0) {
+        g_source_remove(*wait_id);
+        *wait_id = 0;
     }
 }
 
