@@ -239,10 +239,3 @@ void get_xps_months(BSArray *xps_desc, uint months[], size_t months_size) {
     months[0] = 0;
 }
 
-void cancel_wait_id(guint *wait_id) {
-    if (*wait_id != 0) {
-        g_source_remove(*wait_id);
-        *wait_id = 0;
-    }
-}
-

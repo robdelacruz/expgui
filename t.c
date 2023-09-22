@@ -17,15 +17,16 @@ static void refresh_filter_ui(ExpContext *ctx);
 static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin);
 static GtkWidget *create_xps_treeview();
 static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
-
 static int open_xpfile(ExpContext *ctx, char *xpfile);
-static gboolean process_filter(gpointer data);
-static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_cursor);
 
 static void file_open(GtkWidget *w, gpointer data);
-static void txt_filter_changed(GtkWidget *w, gpointer data);
 static void cb_year_changed(GtkWidget *w, gpointer data);
 static void cb_month_changed(GtkWidget *w, gpointer data);
+static void txt_filter_changed(GtkWidget *w, gpointer data);
+static void cancel_wait_id(guint *wait_id);
+
+static gboolean process_filter(gpointer data);
+static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_cursor);
 
 static char *month_names[] = {"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
@@ -323,6 +324,13 @@ static void txt_filter_changed(GtkWidget *w, gpointer data) {
 
     cancel_wait_id(&ctx->filter_wait_id);
     ctx->filter_wait_id = g_timeout_add(200, process_filter, data);
+}
+
+static void cancel_wait_id(guint *wait_id) {
+    if (*wait_id != 0) {
+        g_source_remove(*wait_id);
+        *wait_id = 0;
+    }
 }
 
 static gboolean process_filter(gpointer data) {

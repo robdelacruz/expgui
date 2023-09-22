@@ -44,7 +44,6 @@ void print_xps_lines(BSArray *xps);
 void filter_xps(BSArray *src_xps, BSArray *dest_xps, const char *filter, uint month, uint year);
 void get_xps_years(BSArray *xps_desc, uint years[], size_t years_size);
 void get_xps_months(BSArray *xps_desc, uint months[], size_t months_size);
-void cancel_wait_id(guint *wait_id);
 
 #endif
 
