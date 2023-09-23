@@ -24,11 +24,15 @@ static void cancel_wait_id(guint *wait_id);
 
 static gboolean process_filter(gpointer data);
 static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_cursor);
+static void tp_to_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it);
+static Expense *expense_from_treeiter(GtkTreeView *tv, GtkTreeIter *it);
+static Expense *expense_from_treepath(GtkTreeView *tv, GtkTreePath *tp);
 
 static void txt_filter_changed(GtkWidget *w, gpointer data);
 static void cb_year_changed(GtkWidget *w, gpointer data);
 static void cb_month_changed(GtkWidget *w, gpointer data);
 static void tv_xps_rowactivated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data);
+static void ts_xps_changed(GtkTreeSelection *ts, gpointer data);
 
 static char *month_names[] = {"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
@@ -79,6 +83,7 @@ static void setup_ui(ExpContext *ctx) {
     GtkWidget *cb_year;
     GtkWidget *vbox1;
     GtkWidget *hbox1;
+    GtkTreeSelection *ts;
 
     // mainwin
     mainwin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -97,22 +102,23 @@ static void setup_ui(ExpContext *ctx) {
     // Filter section
     hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     g_object_set(hbox1, "margin-start", 10, "margin-end", 10, NULL);
+
     txt_filter = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(txt_filter), "Filter Expenses");
+
     cb_year = gtk_combo_box_text_new();
+    g_object_set(cb_year, "margin-start", 5, "margin-end", 5, NULL);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_year), "All");
     gtk_combo_box_set_active(GTK_COMBO_BOX(cb_year), 0);
+
     cb_month = gtk_combo_box_text_new();
+    g_object_set(cb_month, "margin-start", 5, "margin-end", 5, NULL);
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(cb_month), "All");
     gtk_combo_box_set_active(GTK_COMBO_BOX(cb_month), 0);
+
     gtk_box_pack_start(GTK_BOX(hbox1), txt_filter, TRUE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(hbox1), cb_year, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(hbox1), cb_month, FALSE, FALSE, 0);
-
-
-    notebook = gtk_notebook_new();
-    gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_BOTTOM);
-    g_object_set(notebook, "margin-start", 10, "margin-end", 10, NULL);
 
     // Expenses list
     sw_xps = gtk_scrolled_window_new(NULL, NULL);
@@ -120,6 +126,12 @@ static void setup_ui(ExpContext *ctx) {
     tv_xps = create_xps_treeview();
     gtk_container_add(GTK_CONTAINER(sw_xps), tv_xps);
 
+    ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv_xps));
+    gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
+
+    notebook = gtk_notebook_new();
+    gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_BOTTOM);
+    g_object_set(notebook, "margin-start", 10, "margin-end", 10, NULL);
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sw_xps, gtk_label_new("Expenses"));
 
     // Main window
@@ -136,6 +148,7 @@ static void setup_ui(ExpContext *ctx) {
     g_signal_connect(cb_year, "changed", G_CALLBACK(cb_year_changed), ctx);
     g_signal_connect(cb_month, "changed", G_CALLBACK(cb_month_changed), ctx);
     g_signal_connect(tv_xps, "row-activated", G_CALLBACK(tv_xps_rowactivated), ctx);
+    g_signal_connect(ts, "changed", G_CALLBACK(ts_xps_changed), ctx);
 
     gtk_widget_grab_focus(tv_xps);
 
@@ -325,6 +338,8 @@ static void cb_month_changed(GtkWidget *w, gpointer data) {
     int month = 0;
 
     month = gtk_combo_box_get_active(GTK_COMBO_BOX(ctx->cb_month));
+    if (month == -1)
+        return;
     if (month == ctx->filter_month)
         return;
 
@@ -364,6 +379,12 @@ static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_c
     GtkListStore *ls;
     GtkTreeIter it;
     GtkTreePath *tp;
+    GtkTreeSelection *ts;
+
+    // Turn off selection while refreshing treeview so we don't get
+    // bombarded by 'change' events.
+    ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
+    gtk_tree_selection_set_mode(ts, GTK_SELECTION_NONE);
 
     ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(tv)));
     assert(ls != NULL);
@@ -376,6 +397,8 @@ static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_c
         gtk_list_store_set(ls, &it, 0, xp->dt->s, 1, xp->desc, 2, xp->amt, 3, xp->cat, -1);
     }
 
+    gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
+
     if (reset_cursor) {
         tp = gtk_tree_path_new_from_string("0");
         gtk_tree_view_set_cursor(GTK_TREE_VIEW(tv), tp, NULL, FALSE);
@@ -383,23 +406,57 @@ static void refresh_treeview_xps(GtkTreeView *tv, BSArray *xps, gboolean reset_c
     }
 }
 
-static void tv_xps_rowactivated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
-    GtkListStore *ls;
-    GtkTreeIter it;
-    Expense xp;
-    gchar *sdate;
-
-    gchar *spath = gtk_tree_path_to_string(tp);
-    printf("spath: '%s'\n", spath);
-    g_free(spath);
-
-    ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
-    assert(ls != NULL);
-    gtk_tree_model_get_iter(GTK_TREE_MODEL(ls), &it, tp);
-    gtk_tree_model_get(GTK_TREE_MODEL(ls), &it, 0, &sdate, 1, &xp.desc, 2, &xp.amt, 3, &xp.cat, -1);
-    xp.dt = bs_date_iso_new(sdate);
-    printf("sdate: '%s', sdesc: '%s', amt: %.2f, scat: '%s'\n", xp.dt->s, xp.desc, xp.amt, xp.cat);
-    bs_date_free(xp.dt);
+static void tp_to_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it) {
+    gtk_tree_model_get_iter(gtk_tree_view_get_model(tv), it, tp);
 }
 
+static Expense *expense_from_treeiter(GtkTreeView *tv, GtkTreeIter *it) {
+    GtkListStore *ls;
+    Expense *xp;
+    gchar *sdate;
+    gchar *desc;
+    gdouble amt;
+    gchar *cat;
+
+    ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
+    gtk_tree_model_get(GTK_TREE_MODEL(ls), it, 0, &sdate, 1, &desc, 2, &amt, 3, &cat, -1);
+    xp = expense_new(sdate, "", desc, amt, cat);
+
+    g_free(sdate);
+    g_free(desc);
+    g_free(cat);
+    return xp;
+}
+
+static Expense *expense_from_treepath(GtkTreeView *tv, GtkTreePath *tp) {
+    GtkTreeIter it;
+    tp_to_it(tv, tp, &it);
+    return expense_from_treeiter(tv, &it);
+}
+
+static void tv_xps_rowactivated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
+    Expense *xp;
+
+//    gchar *spath = gtk_tree_path_to_string(tp);
+//    printf("spath: '%s'\n", spath);
+//    g_free(spath);
+
+    xp = expense_from_treepath(tv, tp);
+    printf("(rowactivated)\n");
+    expense_free(xp);
+}
+
+static void ts_xps_changed(GtkTreeSelection *ts, gpointer data) {
+    GtkTreeView *tv;
+    GtkListStore *ls;
+    GtkTreeIter it;
+    Expense *xp;
+
+    if (!gtk_tree_selection_get_selected(ts, (GtkTreeModel **)&ls, &it))
+        return;
+    tv = gtk_tree_selection_get_tree_view(ts);
+    xp = expense_from_treeiter(tv, &it);
+    printf("(changed)\n");
+    expense_free(xp);
+}
 

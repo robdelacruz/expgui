@@ -19,6 +19,24 @@ static char *read_field(char *startp, char **field);
 static char *read_field_double(char *startp, double *field);
 static void read_xp_line(char *buf, Expense *xp);
 
+Expense *expense_new(char *isodate, char *time, char *desc, double amt, char *cat) {
+    Expense *xp = malloc(sizeof(Expense));
+    xp->dt = bs_date_iso_new(isodate);
+    xp->time = bs_strdup(time);
+    xp->desc = bs_strdup(desc);
+    xp->amt = amt;
+    xp->cat = bs_strdup(cat);
+    return xp;
+}
+
+void expense_free(Expense *xp) {
+    bs_date_free(xp->dt);
+    free(xp->time);
+    free(xp->desc);
+    free(xp->cat);
+    free(xp);
+}
+
 ExpContext *create_context() {
     ExpContext *ctx = bs_malloc(sizeof(ExpContext));
 

@@ -32,6 +32,9 @@ typedef struct {
     uint xps_months[12];
 } ExpContext;
 
+Expense *expense_new(char *isodate, char *time, char *desc, double amt, char *cat);
+void expense_free(Expense *xp);
+
 ExpContext *create_context();
 void free_context(ExpContext *ctx);
 void print_context(ExpContext *ctx);
