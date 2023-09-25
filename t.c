@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <errno.h>
+#include <ctype.h>
 #include <gtk/gtk.h>
 
 #include "bslib.h"
@@ -475,6 +476,30 @@ static void ts_xps_changed(GtkTreeSelection *ts, gpointer data) {
     expense_free(xp);
 }
 
+void amt_insert_text(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data) {
+    gchar new_ch;
+
+    if (strlen(new_txt) > 1)
+        return;
+    new_ch = new_txt[0];
+
+    // Only allow 0-9 or '.'
+    if (!isdigit(new_ch) && new_ch != '.') {
+        g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
+        return;
+    }
+
+    // Only allow one '.' in entry
+    if (new_ch == '.') {
+        const gchar *cur_txt = gtk_entry_get_text(ed);
+        if (strchr(cur_txt, '.') != NULL) {
+            g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
+            return;
+        }
+    }
+}
+
+
 XPEditDlg *xpeditdlg_new(Expense *xp) {
     XPEditDlg *xpdlg;
     GtkWidget *dlg;
@@ -507,6 +532,7 @@ XPEditDlg *xpeditdlg_new(Expense *xp) {
     txt_amt = gtk_entry_new();
     txt_cat = gtk_entry_new();
     gtk_entry_set_width_chars(GTK_ENTRY(txt_desc), 25);
+    g_signal_connect(txt_amt, "insert-text", G_CALLBACK(amt_insert_text), NULL);
 
     gtk_entry_set_text(GTK_ENTRY(txt_date), xp->dt->s); 
     gtk_entry_set_text(GTK_ENTRY(txt_desc), xp->desc); 
