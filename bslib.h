@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define bs_countof(v) (sizeof(v) / sizeof((v)[0]))
+#define countof(v) (sizeof(v) / sizeof((v)[0]))
 
 typedef void (*BSDestroyFunc)(void *);
 typedef void (*BSForeachFunc)(uint index, void *item, void *data);

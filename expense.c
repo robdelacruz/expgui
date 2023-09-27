@@ -11,16 +11,14 @@
 
 #define BUFLINE_SIZE 255
 
-static void clear_expense(void *xp);
-static int compare_expense_date(void *xp1, void *xp2);
 static void chomp(char *buf);
 static char *skip_ws(char *startp);
 static char *read_field(char *startp, char **field);
 static char *read_field_double(char *startp, double *field);
-static void read_xp_line(char *buf, Expense *xp);
+static Expense *read_xp_line(char *buf);
 
-Expense *expense_new(char *isodate, char *time, char *desc, double amt, char *cat) {
-    Expense *xp = malloc(sizeof(Expense));
+Expense *create_expense(char *isodate, char *time, char *desc, double amt, char *cat) {
+    Expense *xp = bs_malloc(sizeof(Expense));
     xp->dt = bs_date_iso_new(isodate);
     xp->time = bs_strdup(time);
     xp->desc = bs_strdup(desc);
@@ -29,23 +27,24 @@ Expense *expense_new(char *isodate, char *time, char *desc, double amt, char *ca
     return xp;
 }
 
-void expense_free(Expense *xp) {
+void free_expense(Expense *xp) {
     bs_date_free(xp->dt);
-    free(xp->time);
-    free(xp->desc);
-    free(xp->cat);
-    free(xp);
+    bs_free(xp->time);
+    bs_free(xp->desc);
+    bs_free(xp->cat);
+    bs_free(xp);
 }
 
 ExpContext *create_context() {
     ExpContext *ctx = bs_malloc(sizeof(ExpContext));
 
     ctx->xpfile = strdup("");
-    ctx->xps = new_xps();
-    ctx->filtered_xps = bs_array_type_new(Expense, 0);
-    ctx->filter_year = 0;
-    ctx->filter_month = 0;
-    ctx->filter_wait_id = 0;
+    memset(ctx->all_xps, 0, sizeof(ctx->all_xps));
+    memset(ctx->view_xps, 0, sizeof(ctx->view_xps));
+
+    ctx->view_year = 0;
+    ctx->view_month = 0;
+    ctx->view_wait_id = 0;
 
     ctx->mainwin = NULL;
     ctx->menubar = NULL;
@@ -63,12 +62,14 @@ ExpContext *create_context() {
 
 void free_context(ExpContext *ctx) {
     if (ctx->xpfile)
-        free(ctx->xpfile);
-    if (ctx->xps)
-        bs_array_free(ctx->xps);
-    if (ctx->filtered_xps)
-        bs_array_free(ctx->filtered_xps);
-    free(ctx);
+        bs_free(ctx->xpfile);
+
+    for (int i=0; i < countof(ctx->all_xps); i++) {
+        if (ctx->all_xps[i] != NULL)
+            free_expense(ctx->all_xps[i]);
+    }
+
+    bs_free(ctx);
 }
 
 void print_context(ExpContext *ctx) {
@@ -76,60 +77,47 @@ void print_context(ExpContext *ctx) {
     printf("xpfile: '%s'\n", ctx->xpfile);
 }
 
-BSArray *new_xps() {
-    BSArray *xps = bs_array_type_new(Expense, 12);
-    bs_array_set_clear_func(xps, clear_expense);
-    return xps;
-}
-
-static void clear_expense(void *xp) {
-    Expense *p = xp;
-    if (p->dt)
-        bs_date_free(p->dt);
-    if (p->time)
-        free(p->time);
-    if (p->desc)
-        free(p->desc);
-    if (p->cat)
-        free(p->cat);
-}
-
 // Return 0 for success, 1 for failure with errno set.
-int load_xpfile(const char *xpfile, BSArray *xps) {
-    Expense xp;
+int load_expense_file(const char *xpfile, Expense *xps[], size_t xps_size, size_t *ret_count_xps) {
+    Expense *xp;
+    size_t count_xps = 0;
     FILE *f;
     char *buf;
     size_t buf_size;
-    int z;
+    int i, z;
 
     f = fopen(xpfile, "r");
     if (f == NULL)
         return 1;
 
-    bs_array_clear(xps);
-    buf = malloc(BUFLINE_SIZE);
+    buf = bs_malloc(BUFLINE_SIZE);
     buf_size = BUFLINE_SIZE;
 
-    while (1) {
+    for (i=0; i < xps_size; i++) {
         errno = 0;
         z = getline(&buf, &buf_size, f);
         if (z == -1 && errno != 0) {
             printf("error: z:%d\n", z);
-            free(buf);
+            bs_free(buf);
             fclose(f);
-            bs_array_clear(xps);
+            *ret_count_xps = 0;
             return 1;
         }
         if (z == -1)
             break;
 
         chomp(buf);
-        read_xp_line(buf, &xp);
-        bs_array_append(xps, &xp);
+        xp = read_xp_line(buf);
+        xps[count_xps] = xp;
+        count_xps++;
     }
 
-    free(buf);
+    if (i == xps_size)
+        printf("Maximum number of expenses (%ld) reached. Wasn't able to load all expenses.\n", xps_size);
+
+    bs_free(buf);
     fclose(f);
+    *ret_count_xps = count_xps;
     return 0;
 }
 
@@ -180,7 +168,9 @@ static char *read_field_double(char *startp, double *field) {
     return p;
 }
 
-static void read_xp_line(char *buf, Expense *xp) {
+static Expense *read_xp_line(char *buf) {
+    Expense *xp = bs_malloc(sizeof(Expense));
+
     // Sample expense line:
     // 2016-05-01; 00:00; Mochi Cream coffee; 100.00; coffee
 
@@ -190,37 +180,63 @@ static void read_xp_line(char *buf, Expense *xp) {
     p = read_field(p, &xp->desc);
     p = read_field_double(p, &xp->amt);
     p = read_field(p, &xp->cat);
+    return xp;
 }
 
-static int compare_xp_date_asc(void *xp1, void *xp2) {
+static int compare_expense_date_asc(void *xp1, void *xp2) {
     Expense *p1 = (Expense *)xp1;
     Expense *p2 = (Expense *)xp2;
     return strcmp(p1->dt->s, p2->dt->s);
 }
-static int compare_xp_date_desc(void *xp1, void *xp2) {
+void sort_expenses_by_date_asc(Expense *xps[], size_t xps_len) {
+    sort_array((void **)xps, xps_len, compare_expense_date_asc);
+}
+static int compare_expense_date_desc(void *xp1, void *xp2) {
     Expense *p1 = (Expense *)xp1;
     Expense *p2 = (Expense *)xp2;
     return strcmp(p2->dt->s, p1->dt->s);
 }
-void sort_xps_bydate_asc(BSArray *xps) {
-    bs_array_sort(xps, compare_xp_date_asc);
+void sort_expenses_by_date_desc(Expense *xps[], size_t xps_len) {
+    sort_array((void **)xps, xps_len, compare_expense_date_desc);
 }
-void sort_xps_bydate_desc(BSArray *xps) {
-    bs_array_sort(xps, compare_xp_date_desc);
+static void swap_array(void *array[], int i, int j) {
+    void *tmp = array[i];
+    array[i] = array[j];
+    array[j] = tmp;
 }
+static int sort_array_partition(void *array[], int start, int end, CompareFunc compare_func) {
+    int imid = start;
+    void *pivot = array[end];
 
-void print_xps_lines(BSArray *xps) {
-    for (int i=0; i < xps->len; i++) {
-        Expense *xp = bs_array_get(xps, i);
-        printf("%d: %-12s %-35s %9.2f  %-15s\n", i, xp->dt->s, xp->desc, xp->amt, xp->cat);
+    for (int i=start; i < end; i++) {
+        if (compare_func(array[i], pivot) < 0) {
+            swap_array(array, imid, i);
+            imid++;
+        }
     }
+    swap_array(array, imid, end);
+    return imid;
+}
+static void sort_array_part(void *array[], int start, int end, CompareFunc compare_func) {
+    if (start >= end)
+        return;
+
+    int pivot = sort_array_partition(array, start, end, compare_func);
+    sort_array_part(array, start, pivot-1, compare_func);
+    sort_array_part(array, pivot+1, end, compare_func);
+}
+void sort_array(void *array[], size_t array_len, CompareFunc compare_func) {
+    sort_array_part(array, 0, array_len-1, compare_func);
 }
 
-void filter_xps(BSArray *src_xps, BSArray *dest_xps, const char *filter, uint month, uint year) {
-    bs_array_clear(dest_xps);
+void filter_expenses(Expense *src_xps[], size_t src_xps_len,
+                     Expense *dest_xps[], size_t *ret_dest_xps_len,
+                     const char *filter, uint month, uint year) {
+    size_t dest_xps_len;
+    size_t count_dest_xps = 0;
 
-    for (int i=0; i < src_xps->len; i++) {
-        Expense *xp = bs_array_get(src_xps, i);
+    for (int i=0; i < src_xps_len; i++) {
+        Expense *xp = src_xps[i];
 
         if (month != 0 && xp->dt->month != month)
             continue;
@@ -229,16 +245,19 @@ void filter_xps(BSArray *src_xps, BSArray *dest_xps, const char *filter, uint mo
         if (strcasestr(xp->desc, filter) == NULL)
             continue;
 
-        bs_array_append(dest_xps, xp);
+        dest_xps[count_dest_xps] = xp;
+        count_dest_xps++;
     }
+
+    *ret_dest_xps_len = count_dest_xps;
 }
 
-void get_xps_years(BSArray *xps_desc, uint years[], size_t years_size) {
+void get_expenses_years(Expense *xps[], size_t xps_len, uint years[], size_t years_size) {
     int lowest_year = 10000;
     int j = 0;
 
-    for (int i=0; i < xps_desc->len; i++) {
-        Expense *xp = bs_array_get(xps_desc, i);
+    for (int i=0; i < xps_len; i++) {
+        Expense *xp = xps[i];
         uint xp_year = xp->dt->year;
         if (xp_year < lowest_year) {
             years[j] = xp_year;
@@ -253,7 +272,7 @@ void get_xps_years(BSArray *xps_desc, uint years[], size_t years_size) {
     years[j] = 0;
 }
 
-void get_xps_months(BSArray *xps_desc, uint months[], size_t months_size) {
+void get_expenses_months(Expense *xps[], size_t xps_len, uint months[], size_t months_size) {
     months[0] = 0;
 }
 
