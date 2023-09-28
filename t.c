@@ -4,11 +4,11 @@
 #include <stdint.h>
 #include <assert.h>
 #include <errno.h>
-#include <ctype.h>
 #include <gtk/gtk.h>
 
 #include "bslib.h"
 #include "expense.h"
+#include "expenseui.h"
 
 void quit(const char *s);
 void print_error(const char *s);
@@ -18,7 +18,7 @@ static void refresh_filter_ui(ExpContext *ctx);
 static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin);
 static GtkWidget *create_xps_treeview();
 static void amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
-static int open_xpfile(ExpContext *ctx, char *xpfile);
+static int open_expense_file(ExpContext *ctx, char *xpfile);
 
 static void file_open(GtkWidget *w, gpointer data);
 static void cancel_wait_id(guint *wait_id);
@@ -35,18 +35,6 @@ static void cb_month_changed(GtkWidget *w, gpointer data);
 static void tv_xps_rowactivated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data);
 static void ts_xps_changed(GtkTreeSelection *ts, gpointer data);
 
-typedef struct {
-    GtkDialog *dlg;
-    GtkEntry *txt_date;
-    GtkEntry *txt_desc;
-    GtkEntry *txt_amt;
-    GtkEntry *txt_cat;
-    Expense *xp;
-} XPEditDlg;
-
-XPEditDlg *xpeditdlg_new(Expense *xp);
-void xpeditdlg_free(XPEditDlg *xpdlg);
-
 static char *month_names[] = {"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
 int main(int argc, char *argv[]) {
@@ -58,7 +46,7 @@ int main(int argc, char *argv[]) {
     setup_ui(ctx);
 
     if (argc > 1) {
-        z = open_xpfile(ctx, argv[1]);
+        z = open_expense_file(ctx, argv[1]);
         if (z != 0)
             print_error("Error reading expense file");
     }
@@ -299,7 +287,7 @@ static void file_open(GtkWidget *w, gpointer data) {
     xpfile = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dlg));
     if (xpfile == NULL)
         goto exit;
-    z = open_xpfile(ctx, xpfile);
+    z = open_expense_file(ctx, xpfile);
     if (z != 0)
         print_error("Error reading expense file");
 
@@ -309,8 +297,10 @@ exit:
     gtk_widget_destroy(dlg);
 }
 
-static int open_xpfile(ExpContext *ctx, char *xpfile) {
+static int open_expense_file(ExpContext *ctx, char *xpfile) {
     int z;
+
+    free_expense_array(ctx->all_xps, countof(ctx->all_xps));
 
     z = load_expense_file(xpfile, ctx->all_xps, countof(ctx->all_xps), &ctx->all_xps_len);
     if (z != 0)
@@ -453,16 +443,19 @@ static Expense *expense_from_treepath(GtkTreeView *tv, GtkTreePath *tp) {
 
 static void tv_xps_rowactivated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
     Expense *xp;
-    XPEditDlg *xpdlg;
+    ExpenseEditDialog *d;
     gint z;
 
     printf("(rowactivated)\n");
 
     xp = expense_from_treepath(tv, tp);
-    xpdlg = xpeditdlg_new(xp);
-    z = gtk_dialog_run(xpdlg->dlg);
+    d = create_expense_edit_dialog(xp);
+    z = gtk_dialog_run(d->dlg);
+    if (z == GTK_RESPONSE_OK) {
+        get_edit_expense(d, xp);
+    }
 
-    xpeditdlg_free(xpdlg);
+    free_expense_edit_dialog(d);
     free_expense(xp);
 }
 
@@ -478,109 +471,5 @@ static void ts_xps_changed(GtkTreeSelection *ts, gpointer data) {
     xp = expense_from_treeiter(tv, &it);
     printf("(changed)\n");
     free_expense(xp);
-}
-
-void amt_insert_text(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data) {
-    gchar new_ch;
-
-    if (strlen(new_txt) > 1)
-        return;
-    new_ch = new_txt[0];
-
-    // Only allow 0-9 or '.'
-    if (!isdigit(new_ch) && new_ch != '.') {
-        g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
-        return;
-    }
-
-    // Only allow one '.' in entry
-    if (new_ch == '.') {
-        const gchar *cur_txt = gtk_entry_get_text(ed);
-        if (strchr(cur_txt, '.') != NULL) {
-            g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
-            return;
-        }
-    }
-}
-
-
-XPEditDlg *xpeditdlg_new(Expense *xp) {
-    XPEditDlg *xpdlg;
-    GtkWidget *dlg;
-    GtkWidget *dlgbox;
-    GtkWidget *lbl_date, *lbl_desc, *lbl_amt, *lbl_cat;
-    GtkWidget *txt_date, *txt_desc, *txt_amt, *txt_cat;
-    GtkWidget *tbl;
-    char samt[12];
-
-    dlg = gtk_dialog_new_with_buttons("Edit Expense", NULL, GTK_DIALOG_MODAL,
-                                      GTK_STOCK_OK, GTK_RESPONSE_OK,
-                                      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
-                                      NULL);
-    gtk_dialog_set_default_response(GTK_DIALOG(dlg), GTK_RESPONSE_CANCEL);
-    GtkWidget *btn_ok = gtk_dialog_get_widget_for_response(GTK_DIALOG(dlg), GTK_RESPONSE_OK); 
-    if (btn_ok)
-        gtk_widget_grab_focus(btn_ok);
-
-    lbl_date = gtk_label_new("Date");
-    lbl_desc = gtk_label_new("Description");
-    lbl_amt = gtk_label_new("Amount");
-    lbl_cat = gtk_label_new("Category");
-    g_object_set(lbl_date, "xalign", 0.0, NULL);
-    g_object_set(lbl_desc, "xalign", 0.0, NULL);
-    g_object_set(lbl_amt, "xalign", 0.0, NULL);
-    g_object_set(lbl_cat, "xalign", 0.0, NULL);
-
-    txt_date = gtk_entry_new();
-    txt_desc = gtk_entry_new();
-    txt_amt = gtk_entry_new();
-    txt_cat = gtk_entry_new();
-    gtk_entry_set_width_chars(GTK_ENTRY(txt_desc), 25);
-    g_signal_connect(txt_amt, "insert-text", G_CALLBACK(amt_insert_text), NULL);
-
-    gtk_entry_set_text(GTK_ENTRY(txt_date), xp->dt->s); 
-    gtk_entry_set_text(GTK_ENTRY(txt_desc), xp->desc); 
-    snprintf(samt, sizeof(samt), "%.2f", xp->amt);
-    gtk_entry_set_text(GTK_ENTRY(txt_amt), samt); 
-    gtk_entry_set_text(GTK_ENTRY(txt_cat), xp->cat); 
-
-    tbl = gtk_table_new(4, 2, FALSE);
-    gtk_table_set_row_spacings(GTK_TABLE(tbl), 5);
-    gtk_table_set_col_spacings(GTK_TABLE(tbl), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(tbl), 5);
-    gtk_table_attach(GTK_TABLE(tbl), lbl_date, 0,1, 0,1, GTK_FILL, GTK_SHRINK, 0,0);
-    gtk_table_attach(GTK_TABLE(tbl), lbl_desc, 0,1, 1,2, GTK_FILL, GTK_SHRINK, 0,0);
-    gtk_table_attach(GTK_TABLE(tbl), lbl_amt,  0,1, 2,3, GTK_FILL, GTK_SHRINK, 0,0);
-    gtk_table_attach(GTK_TABLE(tbl), lbl_cat,  0,1, 3,4, GTK_FILL, GTK_SHRINK, 0,0);
-    gtk_table_attach(GTK_TABLE(tbl), txt_date, 1,2, 0,1, GTK_FILL, GTK_SHRINK, 0,0);
-    gtk_table_attach(GTK_TABLE(tbl), txt_desc, 1,2, 1,2, GTK_FILL, GTK_SHRINK, 0,0);
-    gtk_table_attach(GTK_TABLE(tbl), txt_amt,  1,2, 2,3, GTK_FILL, GTK_SHRINK, 0,0);
-    gtk_table_attach(GTK_TABLE(tbl), txt_cat,  1,2, 3,4, GTK_FILL, GTK_SHRINK, 0,0);
-
-    dlgbox = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
-    gtk_box_pack_start(GTK_BOX(dlgbox), tbl, TRUE, TRUE, 0);
-    gtk_widget_show_all(dlg);
-
-    xpdlg = bs_malloc(sizeof(XPEditDlg));
-    xpdlg->dlg = GTK_DIALOG(dlg);
-    xpdlg->txt_date = GTK_ENTRY(txt_date);
-    xpdlg->txt_desc = GTK_ENTRY(txt_desc);
-    xpdlg->txt_amt = GTK_ENTRY(txt_amt);
-    xpdlg->txt_cat = GTK_ENTRY(txt_cat);
-    xpdlg->xp = xp;
-
-    return xpdlg;
-}
-
-void xpeditdlg_free(XPEditDlg *xpdlg) {
-    gtk_widget_destroy(GTK_WIDGET(xpdlg->dlg));
-    bs_free(xpdlg);
-}
-
-void xpeditdlg_update_xp(XPEditDlg *d) {
-    const gchar *sdate = gtk_entry_get_text(GTK_ENTRY(d->txt_date));
-    const gchar *sdesc = gtk_entry_get_text(GTK_ENTRY(d->txt_desc));
-    const gchar *samt = gtk_entry_get_text(GTK_ENTRY(d->txt_amt));
-    const gchar *scat = gtk_entry_get_text(GTK_ENTRY(d->txt_cat));
 }
 

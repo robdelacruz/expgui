@@ -44,8 +44,8 @@ void free_expense(Expense *xp);
 
 ExpContext *create_context();
 void free_context(ExpContext *ctx);
-void print_context(ExpContext *ctx);
 
+void free_expense_array(Expense *xps[], size_t xps_size);
 int load_expense_file(const char *xpfile, Expense *xps[], size_t xps_size, size_t *ret_count_xps);
 void sort_expenses_by_date_asc(Expense *xps[], size_t xps_len);
 void sort_expenses_by_date_desc(Expense *xps[], size_t xps_len);

@@ -63,18 +63,18 @@ ExpContext *create_context() {
 void free_context(ExpContext *ctx) {
     if (ctx->xpfile)
         bs_free(ctx->xpfile);
-
-    for (int i=0; i < countof(ctx->all_xps); i++) {
-        if (ctx->all_xps[i] != NULL)
-            free_expense(ctx->all_xps[i]);
-    }
-
+    free_expense_array(ctx->all_xps, countof(ctx->all_xps));
     bs_free(ctx);
 }
 
-void print_context(ExpContext *ctx) {
-    printf("ExpContext:\n");
-    printf("xpfile: '%s'\n", ctx->xpfile);
+void free_expense_array(Expense *xps[], size_t xps_size) {
+    for (int i=0; i < xps_size; i++) {
+        if (xps[i] == NULL)
+            break;
+
+        free_expense(xps[i]);
+        xps[i] = NULL;
+    }
 }
 
 // Return 0 for success, 1 for failure with errno set.

@@ -1,4 +1,4 @@
-PROGSRC=t.c expense.c
+PROGSRC=t.c expense.c expenseui.c
 LIBSRC=bslib.c
 
 # pkg-config --cflags --libs gtk+-3.0
