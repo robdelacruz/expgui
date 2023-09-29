@@ -96,6 +96,7 @@ void get_edit_expense(ExpenseEditDialog *d, Expense *xp) {
     xp->dt = bs_date_iso_new((char*) sdate);
     xp->time = bs_strdup("");
     xp->desc = bs_strdup((char*) sdesc);
+    xp->amt = atof(samt);
     xp->cat = bs_strdup((char*) scat);
 }
 
