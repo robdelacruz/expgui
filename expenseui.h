@@ -12,6 +12,7 @@ typedef struct {
     GtkEntry *txt_cat;
 } ExpenseEditDialog;
 
+GtkWidget *create_scroll_window(GtkWidget *child);
 GtkWidget *create_expenses_treeview(ExpContext *ctx);
 void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, gboolean reset_cursor);
 

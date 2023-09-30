@@ -59,7 +59,8 @@ static void setup_ui(ExpContext *ctx) {
     GtkWidget *menubar;
     GtkWidget *statusbar;
     GtkWidget *notebook;
-    GtkWidget *sw_xps;
+    GtkWidget *sw;
+    GtkWidget *expenses_view;
     GtkWidget *vbox1;
     GtkWidget *hbox1;
 
@@ -76,13 +77,14 @@ static void setup_ui(ExpContext *ctx) {
     guint statusid =  gtk_statusbar_get_context_id(GTK_STATUSBAR(statusbar), "info");
     gtk_statusbar_push(GTK_STATUSBAR(statusbar), statusid, "Expense Buddy GUI");
 
-    sw_xps = create_expenses_treeview(ctx);
+    expenses_view = create_expenses_treeview(ctx);
+    sw = create_scroll_window(expenses_view);
     hbox1 = create_filter_section(ctx);
 
     notebook = gtk_notebook_new();
     gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_BOTTOM);
     g_object_set(notebook, "margin-start", 10, "margin-end", 10, NULL);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sw_xps, gtk_label_new("Expenses"));
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sw, gtk_label_new("Expenses"));
 
     // Main window
     vbox1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
@@ -95,11 +97,12 @@ static void setup_ui(ExpContext *ctx) {
 
     g_signal_connect(mainwin, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
-    gtk_widget_grab_focus(ctx->tv_xps);
+    gtk_widget_grab_focus(expenses_view);
 
     ctx->mainwin = mainwin;
     ctx->menubar = menubar;
     ctx->notebook = notebook;
+    ctx->expenses_view = expenses_view;
 }
 
 static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin) {
@@ -172,14 +175,13 @@ static int open_expense_file(ExpContext *ctx, char *xpfile) {
     ctx->xpfile = strdup(xpfile);
 
     sort_expenses_by_date_desc(ctx->all_xps, ctx->all_xps_len);
-    get_expenses_years(ctx->all_xps, ctx->all_xps_len, ctx->xps_years, countof(ctx->xps_years));
-    get_expenses_months(ctx->all_xps, ctx->all_xps_len, ctx->xps_months, countof(ctx->xps_months));
+    get_expenses_years(ctx->all_xps, ctx->all_xps_len, ctx->expenses_years, countof(ctx->expenses_years));
     refresh_filter_ui(ctx);
 
     filter_expenses(ctx->all_xps, ctx->all_xps_len,
                     ctx->view_xps, &ctx->view_xps_len,
                     "", 0, 0);
-    refresh_expenses_treeview(GTK_TREE_VIEW(ctx->tv_xps), ctx->view_xps, ctx->view_xps_len, TRUE);
+    refresh_expenses_treeview(GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_len, TRUE);
 
     return 0;
 }

@@ -49,13 +49,12 @@ ExpContext *create_context() {
     ctx->mainwin = NULL;
     ctx->menubar = NULL;
     ctx->notebook = NULL;
-    ctx->tv_xps = NULL;
+    ctx->expenses_view = NULL;
     ctx->txt_filter = NULL;
     ctx->cb_year = NULL;
     ctx->cb_month = NULL;
 
-    memset(ctx->xps_years, 0, sizeof(ctx->xps_years));
-    memset(ctx->xps_months, 0, sizeof(ctx->xps_months));
+    memset(ctx->expenses_years, 0, sizeof(ctx->expenses_years));
 
     return ctx;
 }
@@ -270,9 +269,5 @@ void get_expenses_years(Expense *xps[], size_t xps_len, uint years[], size_t yea
     }
 
     years[j] = 0;
-}
-
-void get_expenses_months(Expense *xps[], size_t xps_len, uint months[], size_t months_size) {
-    months[0] = 0;
 }
 

@@ -10,14 +10,14 @@
 #include "expenseui.h"
 
 static void currency_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data);
+static void date_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data);
 static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
-static void tp_to_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it);
-static Expense *expense_from_treeiter(GtkTreeView *tv, GtkTreeIter *it);
-static Expense *expense_from_treepath(GtkTreeView *tv, GtkTreePath *tp);
+static void get_tree_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it);
+static Expense *get_expense_from_treeview(GtkTreeView *tv, GtkTreeIter *it);
 
-static void tv_xps_rowactivated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data);
-static void ts_xps_changed(GtkTreeSelection *ts, gpointer data);
+static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data);
+static void expense_row_changed(GtkTreeSelection *ts, gpointer data);
 
 static gboolean apply_filter(gpointer data);
 static void txt_filter_changed(GtkWidget *w, gpointer data);
@@ -26,6 +26,14 @@ static void cb_month_changed(GtkWidget *w, gpointer data);
 static void cancel_wait_id(guint *wait_id);
 
 static char *month_names[] = {"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+
+GtkWidget *create_scroll_window(GtkWidget *child) {
+    GtkWidget *sw = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw), GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
+    gtk_container_add(GTK_CONTAINER(sw), child);
+
+    return sw;
+}
 
 GtkWidget *create_expenses_treeview(ExpContext *ctx) {
     GtkWidget *tv;
@@ -38,10 +46,6 @@ GtkWidget *create_expenses_treeview(ExpContext *ctx) {
     int ypadding = 2;
 
     tv = gtk_tree_view_new();
-    sw = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw), GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
-    gtk_container_add(GTK_CONTAINER(sw), tv);
-
     ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
     gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
 
@@ -76,11 +80,10 @@ GtkWidget *create_expenses_treeview(ExpContext *ctx) {
     gtk_tree_view_set_model(GTK_TREE_VIEW(tv), GTK_TREE_MODEL(ls));
     g_object_unref(ls);
 
-    g_signal_connect(tv, "row-activated", G_CALLBACK(tv_xps_rowactivated), ctx);
-    g_signal_connect(ts, "changed", G_CALLBACK(ts_xps_changed), ctx);
+    g_signal_connect(tv, "row-activated", G_CALLBACK(expense_row_activated), ctx);
+    g_signal_connect(ts, "changed", G_CALLBACK(expense_row_changed), ctx);
 
-    ctx->tv_xps = tv;
-    return sw;
+    return tv;
 }
 
 static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data) {
@@ -92,7 +95,7 @@ static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTre
     g_object_set(r, "text", buf, NULL);
 }
 
-static void tv_xps_rowactivated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
+static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
     GtkTreeIter it;
     Expense *xp;
     ExpenseEditDialog *d;
@@ -100,8 +103,8 @@ static void tv_xps_rowactivated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewCol
 
     printf("(rowactivated)\n");
 
-    tp_to_it(tv, tp, &it);
-    xp = expense_from_treeiter(tv, &it);
+    get_tree_it(tv, tp, &it);
+    xp = get_expense_from_treeview(tv, &it);
     d = create_expense_edit_dialog(xp);
     z = gtk_dialog_run(d->dlg);
     if (z == GTK_RESPONSE_OK) {
@@ -114,7 +117,7 @@ static void tv_xps_rowactivated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewCol
     free_expense(xp);
 }
 
-static void ts_xps_changed(GtkTreeSelection *ts, gpointer data) {
+static void expense_row_changed(GtkTreeSelection *ts, gpointer data) {
     GtkTreeView *tv;
     GtkListStore *ls;
     GtkTreeIter it;
@@ -123,16 +126,16 @@ static void ts_xps_changed(GtkTreeSelection *ts, gpointer data) {
     if (!gtk_tree_selection_get_selected(ts, (GtkTreeModel **)&ls, &it))
         return;
     tv = gtk_tree_selection_get_tree_view(ts);
-    xp = expense_from_treeiter(tv, &it);
+    xp = get_expense_from_treeview(tv, &it);
     printf("(changed)\n");
     free_expense(xp);
 }
 
-static void tp_to_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it) {
+static void get_tree_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it) {
     gtk_tree_model_get_iter(gtk_tree_view_get_model(tv), it, tp);
 }
 
-static Expense *expense_from_treeiter(GtkTreeView *tv, GtkTreeIter *it) {
+static Expense *get_expense_from_treeview(GtkTreeView *tv, GtkTreeIter *it) {
     GtkListStore *ls;
     Expense *xp;
     gchar *sdate;
@@ -149,13 +152,6 @@ static Expense *expense_from_treeiter(GtkTreeView *tv, GtkTreeIter *it) {
     g_free(cat);
     return xp;
 }
-
-static Expense *expense_from_treepath(GtkTreeView *tv, GtkTreePath *tp) {
-    GtkTreeIter it;
-    tp_to_it(tv, tp, &it);
-    return expense_from_treeiter(tv, &it);
-}
-
 
 void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, gboolean reset_cursor) {
     GtkListStore *ls;
@@ -233,8 +229,8 @@ void refresh_filter_ui(ExpContext *ctx) {
     gtk_combo_box_text_remove_all(cb_year);
     gtk_combo_box_text_append_text(cb_year, "All");
     gtk_combo_box_set_active(GTK_COMBO_BOX(cb_year), 0);
-    for (int i=0; i < countof(ctx->xps_years); i++) {
-        uint year = ctx->xps_years[i];
+    for (int i=0; i < countof(ctx->expenses_years); i++) {
+        uint year = ctx->expenses_years[i];
         if (year == 0)
             break;
         snprintf(syear, sizeof(syear), "%d", year);
@@ -304,7 +300,7 @@ static gboolean apply_filter(gpointer data) {
     filter_expenses(ctx->all_xps, ctx->all_xps_len,
                     ctx->view_xps, &ctx->view_xps_len,
                     sfilter, ctx->view_month, ctx->view_year);
-    refresh_expenses_treeview(GTK_TREE_VIEW(ctx->tv_xps), ctx->view_xps, ctx->view_xps_len, TRUE);
+    refresh_expenses_treeview(GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_len, TRUE);
 
     ctx->view_wait_id = 0;
     return G_SOURCE_REMOVE;
@@ -344,6 +340,7 @@ ExpenseEditDialog *create_expense_edit_dialog(Expense *xp) {
     txt_cat = gtk_entry_new();
     gtk_entry_set_width_chars(GTK_ENTRY(txt_desc), 25);
     g_signal_connect(txt_amt, "insert-text", G_CALLBACK(currency_text_event), NULL);
+    g_signal_connect(txt_date, "insert-text", G_CALLBACK(date_text_event), NULL);
 
     gtk_entry_set_text(GTK_ENTRY(txt_date), xp->dt->s); 
     gtk_entry_set_text(GTK_ENTRY(txt_desc), xp->desc); 
@@ -421,6 +418,71 @@ static void currency_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *po
             return;
         }
     }
+}
+
+#define ISO_DATE_LEN 10
+
+static void date_text_event(GtkEntry* ed, gchar *new_txt, gint new_txt_len, gint *pos, gpointer data) {
+    gchar new_ch;
+    const gchar *cur_txt;
+    size_t cur_txt_len;
+    gchar buf[ISO_DATE_LEN+1];
+    int ibuf = 0;
+
+    printf("new_txt: '%s', new_txt_len: %d pos: %d\n", new_txt, new_txt_len, *pos);
+
+    if (*pos > ISO_DATE_LEN-1) {
+        g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
+        return;
+    }
+    if (new_txt_len > 1)
+        return;
+    new_ch = new_txt[0];
+
+    // Only allow 0-9
+    if (!isdigit(new_ch)) {
+        g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
+        return;
+    }
+
+    cur_txt = gtk_entry_get_text(ed);
+    cur_txt_len = strlen(cur_txt);
+
+    if (cur_txt_len >= ISO_DATE_LEN) {
+        g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
+        return;
+    }
+
+    // 2023-12-25
+    // 0123456789
+    // 1234567890
+
+    assert(cur_txt_len <= ISO_DATE_LEN-1);
+
+    snprintf(buf, sizeof(buf), "%s", cur_txt);
+    ibuf = *pos;
+    assert(ibuf < sizeof(buf)-1);
+
+    if (ibuf == 4 || ibuf == 7) {
+        buf[ibuf] = '-';
+        ibuf++;
+    }
+    buf[ibuf] = new_ch;
+    ibuf++;
+
+    if (ibuf == 4 || ibuf == 7) {
+        buf[ibuf] = '-';
+        ibuf++;
+    }
+    assert(ibuf < sizeof(buf));
+    if (ibuf > cur_txt_len + new_txt_len)
+        buf[ibuf] = 0;
+    *pos = ibuf;
+
+    g_signal_handlers_block_by_func(G_OBJECT(ed), G_CALLBACK(date_text_event), data);
+    gtk_entry_set_text(ed, buf);
+    g_signal_handlers_unblock_by_func(G_OBJECT(ed), G_CALLBACK(date_text_event), data);
+    g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
 }
 
 

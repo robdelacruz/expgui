@@ -30,13 +30,12 @@ typedef struct {
     GtkWidget *mainwin;
     GtkWidget *menubar;
     GtkWidget *notebook;
-    GtkWidget *tv_xps;
+    GtkWidget *expenses_view;
     GtkWidget *txt_filter;
     GtkWidget *cb_year;
     GtkWidget *cb_month;
 
-    uint xps_years[100];
-    uint xps_months[12];
+    uint expenses_years[100];
 } ExpContext;
 
 Expense *create_expense(char *isodate, char *time, char *desc, double amt, char *cat);
@@ -55,7 +54,6 @@ void filter_expenses(Expense *src_xps[], size_t src_xps_len,
                      const char *filter, uint month, uint year);
 
 void get_expenses_years(Expense *xps[], size_t xps_len, uint years[], size_t years_size);
-void get_expenses_months(Expense *xps[], size_t xps_len, uint months[], size_t months_size);
 
 #endif
 
