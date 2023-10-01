@@ -10,7 +10,8 @@
 #include "expenseui.h"
 
 static void currency_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data);
-static void date_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data);
+static void date_insert_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data);
+static void date_delete_text_event(GtkEntry* ed, gint startpos, gint endpos, gpointer data);
 static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
 static void get_tree_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it);
@@ -340,7 +341,8 @@ ExpenseEditDialog *create_expense_edit_dialog(Expense *xp) {
     txt_cat = gtk_entry_new();
     gtk_entry_set_width_chars(GTK_ENTRY(txt_desc), 25);
     g_signal_connect(txt_amt, "insert-text", G_CALLBACK(currency_text_event), NULL);
-    g_signal_connect(txt_date, "insert-text", G_CALLBACK(date_text_event), NULL);
+    g_signal_connect(txt_date, "insert-text", G_CALLBACK(date_insert_text_event), NULL);
+    g_signal_connect(txt_date, "delete-text", G_CALLBACK(date_delete_text_event), NULL);
 
     gtk_entry_set_text(GTK_ENTRY(txt_date), xp->dt->s); 
     gtk_entry_set_text(GTK_ENTRY(txt_desc), xp->desc); 
@@ -420,69 +422,76 @@ static void currency_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *po
     }
 }
 
+// 2023-12-25
+// 0123456789
+// 1234567890
+
 #define ISO_DATE_LEN 10
 
-static void date_text_event(GtkEntry* ed, gchar *new_txt, gint new_txt_len, gint *pos, gpointer data) {
-    gchar new_ch;
-    const gchar *cur_txt;
-    size_t cur_txt_len;
+static void date_insert_text_event(GtkEntry* ed, gchar *newtxt, gint newtxt_len, gint *pos, gpointer data) {
+    int icur = *pos;
+    gchar newch;
+    const gchar *curtxt;
+    size_t curtxt_len;
     gchar buf[ISO_DATE_LEN+1];
-    int ibuf = 0;
 
-    printf("new_txt: '%s', new_txt_len: %d pos: %d\n", new_txt, new_txt_len, *pos);
-
-    if (*pos > ISO_DATE_LEN-1) {
-        g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
+    if (newtxt_len > 1)
         return;
-    }
-    if (new_txt_len > 1)
-        return;
-    new_ch = new_txt[0];
+    newch = newtxt[0];
 
     // Only allow 0-9
-    if (!isdigit(new_ch)) {
+    if (!isdigit(newch)) {
         g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
         return;
     }
 
-    cur_txt = gtk_entry_get_text(ed);
-    cur_txt_len = strlen(cur_txt);
+    curtxt = gtk_entry_get_text(ed);
+    curtxt_len = strlen(curtxt);
 
-    if (cur_txt_len >= ISO_DATE_LEN) {
+    if (icur >= ISO_DATE_LEN) {
         g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
         return;
     }
 
-    // 2023-12-25
-    // 0123456789
-    // 1234567890
+    strncpy(buf, curtxt, curtxt_len);
+    buf[curtxt_len] = 0;
 
-    assert(cur_txt_len <= ISO_DATE_LEN-1);
-
-    snprintf(buf, sizeof(buf), "%s", cur_txt);
-    ibuf = *pos;
-    assert(ibuf < sizeof(buf)-1);
-
-    if (ibuf == 4 || ibuf == 7) {
-        buf[ibuf] = '-';
-        ibuf++;
+    if (icur == 3 || icur == 6) {
+        buf[icur] = newch;
+        icur++;
+        buf[icur] = '-';
+    } else if (icur == 4 || icur == 7) {
+        buf[icur] = '-';
+        icur++;
+        buf[icur] = newch;
+    } else {
+        buf[icur] = newch;
     }
-    buf[ibuf] = new_ch;
-    ibuf++;
+    icur++;
+    *pos = icur;
 
-    if (ibuf == 4 || ibuf == 7) {
-        buf[ibuf] = '-';
-        ibuf++;
-    }
-    assert(ibuf < sizeof(buf));
-    if (ibuf > cur_txt_len + new_txt_len)
-        buf[ibuf] = 0;
-    *pos = ibuf;
+    if (icur > curtxt_len-1)
+        buf[icur] = 0;
 
-    g_signal_handlers_block_by_func(G_OBJECT(ed), G_CALLBACK(date_text_event), data);
+    g_signal_handlers_block_by_func(G_OBJECT(ed), G_CALLBACK(date_insert_text_event), data);
     gtk_entry_set_text(ed, buf);
-    g_signal_handlers_unblock_by_func(G_OBJECT(ed), G_CALLBACK(date_text_event), data);
+    g_signal_handlers_unblock_by_func(G_OBJECT(ed), G_CALLBACK(date_insert_text_event), data);
     g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
+}
+
+static void date_delete_text_event(GtkEntry* ed, gint startpos, gint endpos, gpointer data) {
+    // Can't delete more than 1 char.
+    if (endpos - startpos > 1) {
+        g_signal_stop_emission_by_name(G_OBJECT(ed), "delete-text");
+        return;
+    }
+
+    // Can't delete '-'.
+    if (startpos == 4 || startpos == 7) {
+        g_signal_stop_emission_by_name(G_OBJECT(ed), "delete-text");
+        return;
+    }
+
 }
 
 
