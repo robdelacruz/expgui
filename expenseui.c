@@ -480,8 +480,15 @@ static void date_insert_text_event(GtkEntry* ed, gchar *newtxt, gint newtxt_len,
 }
 
 static void date_delete_text_event(GtkEntry* ed, gint startpos, gint endpos, gpointer data) {
-    // Can't delete more than 1 char.
-    if (endpos - startpos > 1) {
+    const gchar *curtxt;
+    size_t curtxt_len;
+    gint del_len = endpos - startpos;
+
+    curtxt = gtk_entry_get_text(ed);
+    curtxt_len = strlen(curtxt);
+
+    // Can't delete more than one char unless entire text is to be deleted.
+    if (del_len > 1 && del_len != curtxt_len) {
         g_signal_stop_emission_by_name(G_OBJECT(ed), "delete-text");
         return;
     }
