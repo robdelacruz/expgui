@@ -12,6 +12,7 @@
 static void currency_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data);
 static void date_insert_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data);
 static void date_delete_text_event(GtkEntry* ed, gint startpos, gint endpos, gpointer data);
+static gboolean date_key_press_event(GtkEntry *ed, GdkEventKey *e, gpointer data);
 static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
 static void get_tree_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it);
@@ -307,7 +308,6 @@ static gboolean apply_filter(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-
 ExpenseEditDialog *create_expense_edit_dialog(Expense *xp) {
     ExpenseEditDialog *d;
     GtkWidget *dlg;
@@ -343,6 +343,7 @@ ExpenseEditDialog *create_expense_edit_dialog(Expense *xp) {
     g_signal_connect(txt_amt, "insert-text", G_CALLBACK(currency_text_event), NULL);
     g_signal_connect(txt_date, "insert-text", G_CALLBACK(date_insert_text_event), NULL);
     g_signal_connect(txt_date, "delete-text", G_CALLBACK(date_delete_text_event), NULL);
+    g_signal_connect(txt_date, "key-press-event", G_CALLBACK(date_key_press_event), NULL);
 
     gtk_entry_set_text(GTK_ENTRY(txt_date), xp->dt->s); 
     gtk_entry_set_text(GTK_ENTRY(txt_desc), xp->desc); 
@@ -439,7 +440,6 @@ static void date_insert_text_event(GtkEntry* ed, gchar *newtxt, gint newtxt_len,
         return;
     newch = newtxt[0];
 
-    // Only allow 0-9
     if (!isdigit(newch)) {
         g_signal_stop_emission_by_name(G_OBJECT(ed), "insert-text");
         return;
@@ -482,23 +482,26 @@ static void date_insert_text_event(GtkEntry* ed, gchar *newtxt, gint newtxt_len,
 static void date_delete_text_event(GtkEntry* ed, gint startpos, gint endpos, gpointer data) {
     const gchar *curtxt;
     size_t curtxt_len;
-    gint del_len = endpos - startpos;
+    gint del_len;
 
     curtxt = gtk_entry_get_text(ed);
     curtxt_len = strlen(curtxt);
+
+    if (endpos == -1)
+        endpos = curtxt_len;
+    del_len = endpos - startpos;
 
     // Can't delete more than one char unless entire text is to be deleted.
     if (del_len > 1 && del_len != curtxt_len) {
         g_signal_stop_emission_by_name(G_OBJECT(ed), "delete-text");
         return;
     }
-
-    // Can't delete '-'.
-    if (startpos == 4 || startpos == 7) {
-        g_signal_stop_emission_by_name(G_OBJECT(ed), "delete-text");
-        return;
-    }
-
 }
 
+static gboolean date_key_press_event(GtkEntry *ed, GdkEventKey *e, gpointer data) {
+    if (e->keyval == GDK_KEY_Delete || e->keyval == GDK_KEY_KP_Delete)
+        return TRUE;
+
+    return FALSE;
+}
 
