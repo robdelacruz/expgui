@@ -138,7 +138,7 @@ static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin) {
 static void file_open(GtkWidget *w, gpointer data) {
     ExpContext *ctx = data;
     GtkWidget *dlg;
-    gchar *xpfile;
+    gchar *xpfile = NULL;
     int z;
 
     dlg = gtk_file_chooser_dialog_new("Open Expense File", GTK_WINDOW(ctx->mainwin),
