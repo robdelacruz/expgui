@@ -9,19 +9,21 @@
 typedef int (*CompareFunc)(void *a, void *b);
 
 typedef struct {
-    BSDate *dt;
-    char *time;
-    char *desc;
+    date_t dt;
+    str_t time;
+    str_t desc;
     double amt;
-    char *cat;
+    str_t cat;
 } Expense;
 
 typedef struct {
-    char *xpfile;
+    arena_t *arena;
+    arena_t *scratch;
+    str_t xpfile;
     Expense *all_xps[MAX_EXPENSES];
     Expense *view_xps[MAX_EXPENSES];
-    size_t all_xps_len;
-    size_t view_xps_len;
+    size_t all_xps_count;
+    size_t view_xps_count;
 
     uint view_year;
     uint view_month;
@@ -34,18 +36,16 @@ typedef struct {
     GtkWidget *txt_filter;
     GtkWidget *cb_year;
     GtkWidget *cb_month;
+    GtkWidget *statusbar;
 
     uint expenses_years[100];
 } ExpContext;
 
-Expense *create_expense(char *isodate, char *time, char *desc, double amt, char *cat);
-void free_expense(Expense *xp);
+Expense *create_expense(arena_t *arena);
+void init_context(ExpContext *ctx, arena_t *arena, arena_t *scratch);
+void reset_context(ExpContext *ctx);
 
-ExpContext *create_context();
-void free_context(ExpContext *ctx);
-
-void free_expense_array(Expense *xps[], size_t xps_size);
-int load_expense_file(const char *xpfile, Expense *xps[], size_t xps_size, size_t *ret_count_xps);
+void load_expense_file(FILE *f, Expense *xps[], size_t xps_size, size_t *ret_count_xps, arena_t *arena);
 void sort_expenses_by_date_asc(Expense *xps[], size_t xps_len);
 void sort_expenses_by_date_desc(Expense *xps[], size_t xps_len);
 void sort_array(void *array[], size_t array_len, CompareFunc compare_func);

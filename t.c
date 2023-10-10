@@ -20,21 +20,25 @@ static int open_expense_file(ExpContext *ctx, char *xpfile);
 static void file_open(GtkWidget *w, gpointer data);
 
 int main(int argc, char *argv[]) {
-    ExpContext *ctx;
+    arena_t app_arena, scratch;
+    ExpContext ctx;
     int z;
 
-    ctx = create_context();
+    app_arena = new_arena(10 * MB_BYTES);
+    scratch = new_arena(0);
+    init_context(&ctx, &app_arena, &scratch);
+
     gtk_init(&argc, &argv);
-    setup_ui(ctx);
+    setup_ui(&ctx);
 
     if (argc > 1) {
-        z = open_expense_file(ctx, argv[1]);
+        z = open_expense_file(&ctx, argv[1]);
         if (z != 0)
             print_error("Error reading expense file");
     }
 
     gtk_main();
-    free_context(ctx);
+    reset_context(&ctx);
     return 0;
 }
 
@@ -103,6 +107,7 @@ static void setup_ui(ExpContext *ctx) {
     ctx->menubar = menubar;
     ctx->notebook = notebook;
     ctx->expenses_view = expenses_view;
+    ctx->statusbar = statusbar;
 }
 
 static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin) {
@@ -164,24 +169,31 @@ exit:
 }
 
 static int open_expense_file(ExpContext *ctx, char *xpfile) {
-    int z;
+    FILE *f;
 
-    free_expense_array(ctx->all_xps, countof(ctx->all_xps));
+    f = fopen(xpfile, "r");
+    if (f == NULL)
+        return 1;
 
-    z = load_expense_file(xpfile, ctx->all_xps, countof(ctx->all_xps), &ctx->all_xps_len);
-    if (z != 0)
-        return z;
-    bs_free(ctx->xpfile);
-    ctx->xpfile = strdup(xpfile);
+    reset_context(ctx);
 
-    sort_expenses_by_date_desc(ctx->all_xps, ctx->all_xps_len);
-    get_expenses_years(ctx->all_xps, ctx->all_xps_len, ctx->expenses_years, countof(ctx->expenses_years));
+    load_expense_file(f, ctx->all_xps, countof(ctx->all_xps), &ctx->all_xps_count, ctx->arena);
+    str_assign(&ctx->xpfile, xpfile);
+    fclose(f);
+
+    sort_expenses_by_date_desc(ctx->all_xps, ctx->all_xps_count);
+    get_expenses_years(ctx->all_xps, ctx->all_xps_count, ctx->expenses_years, countof(ctx->expenses_years));
     refresh_filter_ui(ctx);
 
-    filter_expenses(ctx->all_xps, ctx->all_xps_len,
-                    ctx->view_xps, &ctx->view_xps_len,
+    filter_expenses(ctx->all_xps, ctx->all_xps_count,
+                    ctx->view_xps, &ctx->view_xps_count,
                     "", 0, 0);
-    refresh_expenses_treeview(GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_len, TRUE);
+    refresh_expenses_treeview(*ctx->scratch, GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_count, TRUE);
+
+    char statustxt[255];
+    snprintf(statustxt, sizeof(statustxt), "arena: %ld / %ld, scratch: %ld / %ld", ctx->arena->pos, ctx->arena->cap, ctx->scratch->pos, ctx->scratch->cap);
+    guint statusid =  gtk_statusbar_get_context_id(GTK_STATUSBAR(ctx->statusbar), "info");
+    gtk_statusbar_push(GTK_STATUSBAR(ctx->statusbar), statusid, statustxt);
 
     return 0;
 }

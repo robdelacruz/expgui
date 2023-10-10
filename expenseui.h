@@ -14,12 +14,12 @@ typedef struct {
 
 GtkWidget *create_scroll_window(GtkWidget *child);
 GtkWidget *create_expenses_treeview(ExpContext *ctx);
-void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, gboolean reset_cursor);
+void refresh_expenses_treeview(arena_t scratch, GtkTreeView *tv, Expense *xps[], size_t xps_len, gboolean reset_cursor);
 
 GtkWidget *create_filter_section(ExpContext *ctx);
 void refresh_filter_ui(ExpContext *ctx);
 
-ExpenseEditDialog *create_expense_edit_dialog(Expense *xp);
+ExpenseEditDialog *create_expense_edit_dialog(arena_t *arena, arena_t scratch, Expense *xp);
 void free_expense_edit_dialog(ExpenseEditDialog *d);
 void get_edit_expense(ExpenseEditDialog *d, Expense *xp);
 

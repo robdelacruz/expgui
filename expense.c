@@ -14,33 +14,29 @@
 static void chomp(char *buf);
 static char *skip_ws(char *startp);
 static char *read_field(char *startp, char **field);
+static char *read_field_date(char *startp, date_t *dt);
 static char *read_field_double(char *startp, double *field);
-static Expense *read_xp_line(char *buf);
+static char *read_field_str(char *startp, str_t *str);
+static void read_xp_line(char *buf, Expense *xp);
 
-Expense *create_expense(char *isodate, char *time, char *desc, double amt, char *cat) {
-    Expense *xp = bs_malloc(sizeof(Expense));
-    xp->dt = bs_date_iso_new(isodate);
-    xp->time = bs_strdup(time);
-    xp->desc = bs_strdup(desc);
-    xp->amt = amt;
-    xp->cat = bs_strdup(cat);
+Expense *create_expense(arena_t *arena) {
+    Expense *xp = arena_alloc(arena, sizeof(Expense));
+    xp->dt = default_date();
+    xp->time = new_str(arena, 5);
+    xp->desc = new_str(arena, 0);
+    xp->amt = 0.0;
+    xp->cat = new_str(arena, 10);
     return xp;
 }
 
-void free_expense(Expense *xp) {
-    bs_date_free(xp->dt);
-    bs_free(xp->time);
-    bs_free(xp->desc);
-    bs_free(xp->cat);
-    bs_free(xp);
-}
-
-ExpContext *create_context() {
-    ExpContext *ctx = bs_malloc(sizeof(ExpContext));
-
-    ctx->xpfile = strdup("");
+void init_context(ExpContext *ctx, arena_t *arena, arena_t *scratch) {
+    ctx->arena = arena;
+    ctx->scratch = scratch;
+    ctx->xpfile = new_str(arena, STR_SMALL);
     memset(ctx->all_xps, 0, sizeof(ctx->all_xps));
     memset(ctx->view_xps, 0, sizeof(ctx->view_xps));
+    ctx->all_xps_count = 0;
+    ctx->view_xps_count = 0;
 
     ctx->view_year = 0;
     ctx->view_month = 0;
@@ -53,60 +49,49 @@ ExpContext *create_context() {
     ctx->txt_filter = NULL;
     ctx->cb_year = NULL;
     ctx->cb_month = NULL;
+    ctx->statusbar = NULL;
 
     memset(ctx->expenses_years, 0, sizeof(ctx->expenses_years));
-
-    return ctx;
 }
 
-void free_context(ExpContext *ctx) {
-    if (ctx->xpfile)
-        bs_free(ctx->xpfile);
-    free_expense_array(ctx->all_xps, countof(ctx->all_xps));
-    bs_free(ctx);
-}
+void reset_context(ExpContext *ctx) {
+    str_assign(&ctx->xpfile, "");
+    memset(ctx->all_xps, 0, sizeof(ctx->all_xps));
+    memset(ctx->view_xps, 0, sizeof(ctx->view_xps));
+    ctx->all_xps_count = 0;
+    ctx->view_xps_count = 0;
 
-void free_expense_array(Expense *xps[], size_t xps_size) {
-    for (int i=0; i < xps_size; i++) {
-        if (xps[i] == NULL)
-            break;
-
-        free_expense(xps[i]);
-        xps[i] = NULL;
-    }
+    ctx->view_year = 0;
+    ctx->view_month = 0;
+    ctx->view_wait_id = 0;
+    arena_reset(ctx->arena);
+    arena_reset(ctx->scratch);
 }
 
 // Return 0 for success, 1 for failure with errno set.
-int load_expense_file(const char *xpfile, Expense *xps[], size_t xps_size, size_t *ret_count_xps) {
+void load_expense_file(FILE *f, Expense *xps[], size_t xps_size, size_t *ret_count_xps, arena_t *arena) {
     Expense *xp;
     size_t count_xps = 0;
-    FILE *f;
     char *buf;
     size_t buf_size;
     int i, z;
 
-    f = fopen(xpfile, "r");
-    if (f == NULL)
-        return 1;
-
-    buf = bs_malloc(BUFLINE_SIZE);
+    buf = malloc(BUFLINE_SIZE);
     buf_size = BUFLINE_SIZE;
 
     for (i=0; i < xps_size; i++) {
         errno = 0;
         z = getline(&buf, &buf_size, f);
         if (z == -1 && errno != 0) {
-            printf("error: z:%d\n", z);
-            bs_free(buf);
-            fclose(f);
-            *ret_count_xps = 0;
-            return 1;
+            printf("getline() error: %s\n", strerror(errno));
+            break;
         }
         if (z == -1)
             break;
-
         chomp(buf);
-        xp = read_xp_line(buf);
+
+        xp = create_expense(arena);
+        read_xp_line(buf, xp);
         xps[count_xps] = xp;
         count_xps++;
     }
@@ -114,10 +99,8 @@ int load_expense_file(const char *xpfile, Expense *xps[], size_t xps_size, size_
     if (i == xps_size)
         printf("Maximum number of expenses (%ld) reached. Wasn't able to load all expenses.\n", xps_size);
 
-    bs_free(buf);
-    fclose(f);
+    free(buf);
     *ret_count_xps = count_xps;
-    return 0;
 }
 
 // Remove trailing \n or \r chars.
@@ -127,6 +110,18 @@ static void chomp(char *buf) {
         if (buf[i] == '\n' || buf[i] == '\r')
             buf[i] = 0;
     }
+}
+
+static void read_xp_line(char *buf, Expense *xp) {
+    // Sample expense line:
+    // 2016-05-01; 00:00; Mochi Cream coffee; 100.00; coffee
+
+    char *p = buf;
+    p = read_field_date(p, &xp->dt);
+    p = read_field_str(p, &xp->time);
+    p = read_field_str(p, &xp->desc);
+    p = read_field_double(p, &xp->amt);
+    p = read_field_str(p, &xp->cat);
 }
 
 static char *skip_ws(char *startp) {
@@ -143,57 +138,57 @@ static char *read_field(char *startp, char **field) {
 
     if (*p == ';') {
         *p = '\0';
-        *field = bs_strdup(startp);
+        *field = startp;
         return skip_ws(p+1);
     }
 
-    *field = bs_strdup(startp);
+    *field = startp;
     return p;
 }
 
-static char *read_field_date(char *startp, BSDate **dt) {
+static char *read_field_date(char *startp, date_t *dt) {
     char *sfield;
     char *p = read_field(startp, &sfield);
-    *dt = bs_date_iso_new(sfield);
-    bs_free(sfield);
+    *dt = date_from_iso(sfield);
     return p;
 }
 
-static char *read_field_double(char *startp, double *field) {
+static char *read_field_double(char *startp, double *f) {
     char *sfield;
     char *p = read_field(startp, &sfield);
-    *field = atof(sfield);
-    bs_free(sfield);
+    *f = atof(sfield);
     return p;
 }
 
-static Expense *read_xp_line(char *buf) {
-    Expense *xp = bs_malloc(sizeof(Expense));
-
-    // Sample expense line:
-    // 2016-05-01; 00:00; Mochi Cream coffee; 100.00; coffee
-
-    char *p = buf;
-    p = read_field_date(p, &xp->dt);
-    p = read_field(p, &xp->time);
-    p = read_field(p, &xp->desc);
-    p = read_field_double(p, &xp->amt);
-    p = read_field(p, &xp->cat);
-    return xp;
+static char *read_field_str(char *startp, str_t *str) {
+    char *sfield;
+    char *p = read_field(startp, &sfield);
+    str_assign(str, sfield);
+    return p;
 }
 
 static int compare_expense_date_asc(void *xp1, void *xp2) {
-    Expense *p1 = (Expense *)xp1;
-    Expense *p2 = (Expense *)xp2;
-    return strcmp(p1->dt->s, p2->dt->s);
+    date_t *dt1 = &((Expense*)xp1)->dt;
+    date_t *dt2 = &((Expense*)xp2)->dt;
+    if (dt1->year > dt2->year)
+        return 1;
+    if (dt1->year < dt2->year)
+        return -1;
+    if (dt1->month > dt2->month)
+        return 1;
+    if (dt1->month < dt2->month)
+        return -1;
+    if (dt1->day > dt2->day)
+        return 1;
+    if (dt1->day < dt2->day)
+        return -1;
+    return 0;
 }
 void sort_expenses_by_date_asc(Expense *xps[], size_t xps_len) {
     sort_array((void **)xps, xps_len, compare_expense_date_asc);
 }
 static int compare_expense_date_desc(void *xp1, void *xp2) {
-    Expense *p1 = (Expense *)xp1;
-    Expense *p2 = (Expense *)xp2;
-    return strcmp(p2->dt->s, p1->dt->s);
+    return -compare_expense_date_asc(xp1, xp2);
 }
 void sort_expenses_by_date_desc(Expense *xps[], size_t xps_len) {
     sort_array((void **)xps, xps_len, compare_expense_date_desc);
@@ -237,11 +232,11 @@ void filter_expenses(Expense *src_xps[], size_t src_xps_len,
     for (int i=0; i < src_xps_len; i++) {
         Expense *xp = src_xps[i];
 
-        if (month != 0 && xp->dt->month != month)
+        if (month != 0 && xp->dt.month != month)
             continue;
-        if (year != 0 && xp->dt->year != year)
+        if (year != 0 && xp->dt.year != year)
             continue;
-        if (strcasestr(xp->desc, filter) == NULL)
+        if (strcasestr(xp->desc.s, filter) == NULL)
             continue;
 
         dest_xps[count_dest_xps] = xp;
@@ -257,7 +252,7 @@ void get_expenses_years(Expense *xps[], size_t xps_len, uint years[], size_t yea
 
     for (int i=0; i < xps_len; i++) {
         Expense *xp = xps[i];
-        uint xp_year = xp->dt->year;
+        uint xp_year = xp->dt.year;
         if (xp_year < lowest_year) {
             years[j] = xp_year;
             j++;

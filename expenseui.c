@@ -16,7 +16,7 @@ static gboolean date_key_press_event(GtkEntry *ed, GdkEventKey *e, gpointer data
 static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
 static void get_tree_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it);
-static Expense *get_expense_from_treeview(GtkTreeView *tv, GtkTreeIter *it);
+static Expense *get_expense_from_treeview(arena_t *arena, GtkTreeView *tv, GtkTreeIter *it);
 
 static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data);
 static void expense_row_changed(GtkTreeSelection *ts, gpointer data);
@@ -98,46 +98,50 @@ static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTre
 }
 
 static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
+    ExpContext *ctx = data;
     GtkTreeIter it;
     Expense *xp;
     ExpenseEditDialog *d;
     gint z;
+    arena_t scratch = *ctx->scratch;
 
     printf("(rowactivated)\n");
 
     get_tree_it(tv, tp, &it);
-    xp = get_expense_from_treeview(tv, &it);
-    d = create_expense_edit_dialog(xp);
+    xp = get_expense_from_treeview(&scratch, tv, &it);
+    d = create_expense_edit_dialog(&scratch, scratch, xp);
     z = gtk_dialog_run(d->dlg);
     if (z == GTK_RESPONSE_OK) {
+        char isodate[11];
+        format_date_iso(xp->dt, isodate, sizeof(isodate));
+
         GtkListStore *ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
         get_edit_expense(d, xp);
-        gtk_list_store_set(ls, &it, 0, xp->dt->s, 1, xp->desc, 2, xp->amt, 3, xp->cat, -1);
+        gtk_list_store_set(ls, &it, 0, isodate, 1, xp->desc.s, 2, xp->amt, 3, xp->cat.s, -1);
     }
-
     free_expense_edit_dialog(d);
-    free_expense(xp);
 }
 
 static void expense_row_changed(GtkTreeSelection *ts, gpointer data) {
+    ExpContext *ctx = data;
     GtkTreeView *tv;
     GtkListStore *ls;
     GtkTreeIter it;
     Expense *xp;
+    arena_t scratch = *ctx->scratch;
 
     if (!gtk_tree_selection_get_selected(ts, (GtkTreeModel **)&ls, &it))
         return;
     tv = gtk_tree_selection_get_tree_view(ts);
-    xp = get_expense_from_treeview(tv, &it);
+    xp = get_expense_from_treeview(&scratch, tv, &it);
     printf("(changed)\n");
-    free_expense(xp);
 }
 
 static void get_tree_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it) {
     gtk_tree_model_get_iter(gtk_tree_view_get_model(tv), it, tp);
 }
 
-static Expense *get_expense_from_treeview(GtkTreeView *tv, GtkTreeIter *it) {
+static Expense *get_expense_from_treeview(arena_t *arena, GtkTreeView *tv, GtkTreeIter *it) {
     GtkListStore *ls;
     Expense *xp;
     gchar *sdate;
@@ -147,7 +151,12 @@ static Expense *get_expense_from_treeview(GtkTreeView *tv, GtkTreeIter *it) {
 
     ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
     gtk_tree_model_get(GTK_TREE_MODEL(ls), it, 0, &sdate, 1, &desc, 2, &amt, 3, &cat, -1);
-    xp = create_expense(sdate, "", desc, amt, cat);
+    xp = create_expense(arena);
+    xp->dt = date_from_iso(sdate);
+    str_assign(&xp->time, "");
+    str_assign(&xp->desc, desc);
+    str_assign(&xp->cat, cat);
+    xp->amt = amt;
 
     g_free(sdate);
     g_free(desc);
@@ -155,7 +164,7 @@ static Expense *get_expense_from_treeview(GtkTreeView *tv, GtkTreeIter *it) {
     return xp;
 }
 
-void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, gboolean reset_cursor) {
+void refresh_expenses_treeview(arena_t scratch, GtkTreeView *tv, Expense *xps[], size_t xps_len, gboolean reset_cursor) {
     GtkListStore *ls;
     GtkTreeIter it;
     GtkTreePath *tp;
@@ -172,9 +181,12 @@ void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, 
     gtk_list_store_clear(ls);
 
     for (int i=0; i < xps_len; i++) {
+        char isodate[11];
         Expense *xp = xps[i];
+        format_date_iso(xp->dt, isodate, sizeof(isodate));
+
         gtk_list_store_append(ls, &it);
-        gtk_list_store_set(ls, &it, 0, xp->dt->s, 1, xp->desc, 2, xp->amt, 3, xp->cat, -1);
+        gtk_list_store_set(ls, &it, 0, isodate, 1, xp->desc.s, 2, xp->amt, 3, xp->cat.s, -1);
     }
 
     gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
@@ -299,16 +311,16 @@ static gboolean apply_filter(gpointer data) {
 
     sfilter = gtk_entry_get_text(GTK_ENTRY(ctx->txt_filter));
     printf("filter: '%s', year: %d, month: %d\n", sfilter, ctx->view_year, ctx->view_month);
-    filter_expenses(ctx->all_xps, ctx->all_xps_len,
-                    ctx->view_xps, &ctx->view_xps_len,
+    filter_expenses(ctx->all_xps, ctx->all_xps_count,
+                    ctx->view_xps, &ctx->view_xps_count,
                     sfilter, ctx->view_month, ctx->view_year);
-    refresh_expenses_treeview(GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_len, TRUE);
+    refresh_expenses_treeview(*ctx->scratch, GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_count, TRUE);
 
     ctx->view_wait_id = 0;
     return G_SOURCE_REMOVE;
 }
 
-ExpenseEditDialog *create_expense_edit_dialog(Expense *xp) {
+ExpenseEditDialog *create_expense_edit_dialog(arena_t *arena, arena_t scratch, Expense *xp) {
     ExpenseEditDialog *d;
     GtkWidget *dlg;
     GtkWidget *dlgbox;
@@ -316,6 +328,7 @@ ExpenseEditDialog *create_expense_edit_dialog(Expense *xp) {
     GtkWidget *txt_date, *txt_desc, *txt_amt, *txt_cat;
     GtkWidget *tbl;
     char samt[12];
+    char isodate[11];
 
     dlg = gtk_dialog_new_with_buttons("Edit Expense", NULL, GTK_DIALOG_MODAL,
                                       GTK_STOCK_OK, GTK_RESPONSE_OK,
@@ -345,11 +358,12 @@ ExpenseEditDialog *create_expense_edit_dialog(Expense *xp) {
     g_signal_connect(txt_date, "delete-text", G_CALLBACK(date_delete_text_event), NULL);
     g_signal_connect(txt_date, "key-press-event", G_CALLBACK(date_key_press_event), NULL);
 
-    gtk_entry_set_text(GTK_ENTRY(txt_date), xp->dt->s); 
-    gtk_entry_set_text(GTK_ENTRY(txt_desc), xp->desc); 
+    format_date_iso(xp->dt, isodate, sizeof(isodate));
+    gtk_entry_set_text(GTK_ENTRY(txt_date), isodate); 
+    gtk_entry_set_text(GTK_ENTRY(txt_desc), xp->desc.s); 
     snprintf(samt, sizeof(samt), "%.2f", xp->amt);
     gtk_entry_set_text(GTK_ENTRY(txt_amt), samt); 
-    gtk_entry_set_text(GTK_ENTRY(txt_cat), xp->cat); 
+    gtk_entry_set_text(GTK_ENTRY(txt_cat), xp->cat.s); 
 
     tbl = gtk_table_new(4, 2, FALSE);
     gtk_table_set_row_spacings(GTK_TABLE(tbl), 5);
@@ -368,7 +382,7 @@ ExpenseEditDialog *create_expense_edit_dialog(Expense *xp) {
     gtk_box_pack_start(GTK_BOX(dlgbox), tbl, TRUE, TRUE, 0);
     gtk_widget_show_all(dlg);
 
-    d = bs_malloc(sizeof(ExpenseEditDialog));
+    d = arena_alloc(arena, sizeof(ExpenseEditDialog));
     d->dlg = GTK_DIALOG(dlg);
     d->txt_date = GTK_ENTRY(txt_date);
     d->txt_desc = GTK_ENTRY(txt_desc);
@@ -379,7 +393,6 @@ ExpenseEditDialog *create_expense_edit_dialog(Expense *xp) {
 
 void free_expense_edit_dialog(ExpenseEditDialog *d) {
     gtk_widget_destroy(GTK_WIDGET(d->dlg));
-    bs_free(d);
 }
 
 void get_edit_expense(ExpenseEditDialog *d, Expense *xp) {
@@ -388,16 +401,11 @@ void get_edit_expense(ExpenseEditDialog *d, Expense *xp) {
     const gchar *samt = gtk_entry_get_text(GTK_ENTRY(d->txt_amt));
     const gchar *scat = gtk_entry_get_text(GTK_ENTRY(d->txt_cat));
 
-    bs_date_free(xp->dt);
-    bs_free(xp->time);
-    bs_free(xp->desc);
-    bs_free(xp->cat);
-
-    xp->dt = bs_date_iso_new((char*) sdate);
-    xp->time = bs_strdup("");
-    xp->desc = bs_strdup((char*) sdesc);
+    xp->dt = date_from_iso((char*) sdate);
+    str_assign(&xp->time, "");
+    str_assign(&xp->desc, (char*)sdesc);
     xp->amt = atof(samt);
-    xp->cat = bs_strdup((char*) scat);
+    str_assign(&xp->cat, (char*)scat);
 }
 
 static void currency_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data) {
