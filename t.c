@@ -188,7 +188,7 @@ static int open_expense_file(ExpContext *ctx, char *xpfile) {
     filter_expenses(ctx->all_xps, ctx->all_xps_count,
                     ctx->view_xps, &ctx->view_xps_count,
                     "", 0, 0);
-    refresh_expenses_treeview(*ctx->scratch, GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_count, TRUE);
+    refresh_expenses_treeview(GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_count, TRUE);
 
     char statustxt[255];
     snprintf(statustxt, sizeof(statustxt), "arena: %ld / %ld, scratch: %ld / %ld", ctx->arena->pos, ctx->arena->cap, ctx->scratch->pos, ctx->scratch->cap);

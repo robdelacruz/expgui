@@ -18,6 +18,8 @@
 #define STR_LARGE   (1024*1024)
 #define STR_DEFAULT STR_SMALL
 
+#define ISO_DATE_LEN 10
+
 typedef struct {
     void *base;
     uint64_t pos;

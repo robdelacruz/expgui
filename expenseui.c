@@ -16,7 +16,7 @@ static gboolean date_key_press_event(GtkEntry *ed, GdkEventKey *e, gpointer data
 static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 
 static void get_tree_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it);
-static Expense *get_expense_from_treeview(arena_t *arena, GtkTreeView *tv, GtkTreeIter *it);
+static void get_expense_from_treeview(GtkTreeView *tv, GtkTreeIter *it, Expense *xp);
 
 static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data);
 static void expense_row_changed(GtkTreeSelection *ts, gpointer data);
@@ -100,7 +100,7 @@ static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTre
 static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
     ExpContext *ctx = data;
     GtkTreeIter it;
-    Expense *xp;
+    Expense xp;
     ExpenseEditDialog *d;
     gint z;
     arena_t scratch = *ctx->scratch;
@@ -108,16 +108,18 @@ static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewC
     printf("(rowactivated)\n");
 
     get_tree_it(tv, tp, &it);
-    xp = get_expense_from_treeview(&scratch, tv, &it);
-    d = create_expense_edit_dialog(&scratch, scratch, xp);
+    init_expense(&xp, &scratch);
+    get_expense_from_treeview(tv, &it, &xp);
+    d = create_expense_edit_dialog(&scratch, &xp);
     z = gtk_dialog_run(d->dlg);
     if (z == GTK_RESPONSE_OK) {
-        char isodate[11];
-        format_date_iso(xp->dt, isodate, sizeof(isodate));
+        char isodate[ISO_DATE_LEN+1];
+        format_date_iso(xp.dt, isodate, sizeof(isodate));
 
         GtkListStore *ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
-        get_edit_expense(d, xp);
-        gtk_list_store_set(ls, &it, 0, isodate, 1, xp->desc.s, 2, xp->amt, 3, xp->cat.s, -1);
+        get_edit_expense(d, &xp);
+        format_date_iso(xp.dt, isodate, sizeof(isodate));
+        gtk_list_store_set(ls, &it, 0, isodate, 1, xp.desc.s, 2, xp.amt, 3, xp.cat.s, -1);
     }
     free_expense_edit_dialog(d);
 }
@@ -127,13 +129,14 @@ static void expense_row_changed(GtkTreeSelection *ts, gpointer data) {
     GtkTreeView *tv;
     GtkListStore *ls;
     GtkTreeIter it;
-    Expense *xp;
+    Expense xp;
     arena_t scratch = *ctx->scratch;
 
     if (!gtk_tree_selection_get_selected(ts, (GtkTreeModel **)&ls, &it))
         return;
     tv = gtk_tree_selection_get_tree_view(ts);
-    xp = get_expense_from_treeview(&scratch, tv, &it);
+    init_expense(&xp, &scratch);
+    get_expense_from_treeview(tv, &it, &xp);
     printf("(changed)\n");
 }
 
@@ -141,9 +144,8 @@ static void get_tree_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it) {
     gtk_tree_model_get_iter(gtk_tree_view_get_model(tv), it, tp);
 }
 
-static Expense *get_expense_from_treeview(arena_t *arena, GtkTreeView *tv, GtkTreeIter *it) {
+static void get_expense_from_treeview(GtkTreeView *tv, GtkTreeIter *it, Expense *xp) {
     GtkListStore *ls;
-    Expense *xp;
     gchar *sdate;
     gchar *desc;
     gdouble amt;
@@ -151,7 +153,6 @@ static Expense *get_expense_from_treeview(arena_t *arena, GtkTreeView *tv, GtkTr
 
     ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
     gtk_tree_model_get(GTK_TREE_MODEL(ls), it, 0, &sdate, 1, &desc, 2, &amt, 3, &cat, -1);
-    xp = create_expense(arena);
     xp->dt = date_from_iso(sdate);
     str_assign(&xp->time, "");
     str_assign(&xp->desc, desc);
@@ -161,14 +162,15 @@ static Expense *get_expense_from_treeview(arena_t *arena, GtkTreeView *tv, GtkTr
     g_free(sdate);
     g_free(desc);
     g_free(cat);
-    return xp;
 }
 
-void refresh_expenses_treeview(arena_t scratch, GtkTreeView *tv, Expense *xps[], size_t xps_len, gboolean reset_cursor) {
+void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, gboolean reset_cursor) {
     GtkListStore *ls;
     GtkTreeIter it;
     GtkTreePath *tp;
     GtkTreeSelection *ts;
+    char isodate[ISO_DATE_LEN+1];
+    Expense *xp;
 
     // Turn off selection while refreshing treeview so we don't get
     // bombarded by 'change' events.
@@ -181,8 +183,7 @@ void refresh_expenses_treeview(arena_t scratch, GtkTreeView *tv, Expense *xps[],
     gtk_list_store_clear(ls);
 
     for (int i=0; i < xps_len; i++) {
-        char isodate[11];
-        Expense *xp = xps[i];
+        xp = xps[i];
         format_date_iso(xp->dt, isodate, sizeof(isodate));
 
         gtk_list_store_append(ls, &it);
@@ -314,13 +315,13 @@ static gboolean apply_filter(gpointer data) {
     filter_expenses(ctx->all_xps, ctx->all_xps_count,
                     ctx->view_xps, &ctx->view_xps_count,
                     sfilter, ctx->view_month, ctx->view_year);
-    refresh_expenses_treeview(*ctx->scratch, GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_count, TRUE);
+    refresh_expenses_treeview(GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_count, TRUE);
 
     ctx->view_wait_id = 0;
     return G_SOURCE_REMOVE;
 }
 
-ExpenseEditDialog *create_expense_edit_dialog(arena_t *arena, arena_t scratch, Expense *xp) {
+ExpenseEditDialog *create_expense_edit_dialog(arena_t *arena, Expense *xp) {
     ExpenseEditDialog *d;
     GtkWidget *dlg;
     GtkWidget *dlgbox;
@@ -328,7 +329,7 @@ ExpenseEditDialog *create_expense_edit_dialog(arena_t *arena, arena_t scratch, E
     GtkWidget *txt_date, *txt_desc, *txt_amt, *txt_cat;
     GtkWidget *tbl;
     char samt[12];
-    char isodate[11];
+    char isodate[ISO_DATE_LEN+1];
 
     dlg = gtk_dialog_new_with_buttons("Edit Expense", NULL, GTK_DIALOG_MODAL,
                                       GTK_STOCK_OK, GTK_RESPONSE_OK,
@@ -431,12 +432,6 @@ static void currency_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *po
     }
 }
 
-// 2023-12-25
-// 0123456789
-// 1234567890
-
-#define ISO_DATE_LEN 10
-
 static void date_insert_text_event(GtkEntry* ed, gchar *newtxt, gint newtxt_len, gint *pos, gpointer data) {
     int icur = *pos;
     gchar newch;
@@ -463,6 +458,10 @@ static void date_insert_text_event(GtkEntry* ed, gchar *newtxt, gint newtxt_len,
 
     strncpy(buf, curtxt, curtxt_len);
     buf[curtxt_len] = 0;
+
+    // 2023-12-25
+    // 0123456789
+    // 1234567890
 
     if (icur == 3 || icur == 6) {
         buf[icur] = newch;

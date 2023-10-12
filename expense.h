@@ -42,6 +42,7 @@ typedef struct {
 } ExpContext;
 
 Expense *create_expense(arena_t *arena);
+void init_expense(Expense *xp, arena_t *arena);
 void init_context(ExpContext *ctx, arena_t *arena, arena_t *scratch);
 void reset_context(ExpContext *ctx);
 

@@ -21,12 +21,16 @@ static void read_xp_line(char *buf, Expense *xp);
 
 Expense *create_expense(arena_t *arena) {
     Expense *xp = arena_alloc(arena, sizeof(Expense));
+    init_expense(xp, arena);
+    return xp;
+}
+
+void init_expense(Expense *xp, arena_t *arena) {
     xp->dt = default_date();
     xp->time = new_str(arena, 5);
     xp->desc = new_str(arena, 0);
     xp->amt = 0.0;
     xp->cat = new_str(arena, 10);
-    return xp;
 }
 
 void init_context(ExpContext *ctx, arena_t *arena, arena_t *scratch) {
