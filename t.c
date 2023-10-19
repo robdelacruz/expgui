@@ -69,13 +69,12 @@ static void setup_ui(ExpContext *ctx) {
     //GtkWidget *notebook;
     GtkWidget *expenses_sw;
     GtkWidget *expenses_view;
-    GtkWidget *cat_listbox;
     GtkWidget *action_group;
     GtkWidget *hbox1;
     GtkWidget *vbox1;
 
     GtkWidget *main_vbox;
-    GtkWidget *filter_hbox;
+    GtkWidget *filter_box;
 
     screen = gdk_screen_get_default();
     provider = gtk_css_provider_new();
@@ -96,20 +95,18 @@ static void setup_ui(ExpContext *ctx) {
     guint statusid =  gtk_statusbar_get_context_id(GTK_STATUSBAR(statusbar), "info");
     gtk_statusbar_push(GTK_STATUSBAR(statusbar), statusid, "Expense Buddy GUI");
 
-    filter_hbox = create_filter_section(ctx);
-    cat_listbox = create_cat_listbox();
+    filter_box = create_filter_section(ctx);
     expenses_view = create_expenses_treeview(ctx);
     expenses_sw = create_scroll_window(expenses_view);
     action_group = create_button_group_vertical();
 
     hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_box_pack_start(GTK_BOX(hbox1), cat_listbox, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(hbox1), expenses_sw, TRUE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(hbox1), action_group, FALSE, FALSE, 0);
 
     vbox1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    g_object_set(vbox1, "margin-start", 10, "margin-end", 10, NULL);
-    gtk_box_pack_start(GTK_BOX(vbox1), filter_hbox, FALSE, FALSE, 0);
+    g_object_set(vbox1, "margin-start", 10, "margin-end", 10, "margin-top", 10, NULL);
+    gtk_box_pack_start(GTK_BOX(vbox1), filter_box, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox1), hbox1, TRUE, TRUE, 0);
 
     //notebook = gtk_notebook_new();
@@ -118,7 +115,7 @@ static void setup_ui(ExpContext *ctx) {
     //gtk_notebook_append_page(GTK_NOTEBOOK(notebook), expenses_sw, gtk_label_new("Expenses"));
 
     // Main window
-    main_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    main_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_box_pack_start(GTK_BOX(main_vbox), menubar, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(main_vbox), vbox1, TRUE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(main_vbox), statusbar, FALSE, FALSE, 0);
