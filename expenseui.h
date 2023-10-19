@@ -13,8 +13,11 @@ typedef struct {
 } ExpenseEditDialog;
 
 GtkWidget *create_scroll_window(GtkWidget *child);
+GtkWidget *create_frame(gchar *label, GtkWidget *child);
 GtkWidget *create_expenses_treeview(ExpContext *ctx);
 void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, gboolean reset_cursor);
+GtkWidget *create_cat_listbox();
+GtkWidget *create_button_group_vertical();
 
 GtkWidget *create_filter_section(ExpContext *ctx);
 void refresh_filter_ui(ExpContext *ctx);

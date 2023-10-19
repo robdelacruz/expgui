@@ -37,6 +37,18 @@ GtkWidget *create_scroll_window(GtkWidget *child) {
     return sw;
 }
 
+GtkWidget *create_frame(gchar *label, GtkWidget *child) {
+    GtkWidget *fr = gtk_frame_new(label);
+    gtk_container_add(GTK_CONTAINER(fr), child);
+    return fr;
+}
+
+GtkWidget *create_label_with_margin(gchar *s, int start, int end, int top, int bottom) {
+    GtkWidget *l = gtk_label_new(s);
+    g_object_set(l, "margin-start", start, "margin-end", end, "margin-top", top, "margin-bottom", bottom, NULL);
+    return l;
+}
+
 GtkWidget *create_expenses_treeview(ExpContext *ctx) {
     GtkWidget *tv;
     GtkWidget *sw;
@@ -206,7 +218,6 @@ GtkWidget *create_filter_section(ExpContext *ctx) {
     GtkWidget *hbox;
 
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    g_object_set(hbox, "margin-start", 10, "margin-end", 10, NULL);
 
     txt_filter = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(txt_filter), "Filter Expenses");
@@ -510,5 +521,53 @@ static gboolean date_key_press_event(GtkEntry *ed, GdkEventKey *e, gpointer data
         return TRUE;
 
     return FALSE;
+}
+
+GtkWidget *create_cat_listbox() {
+    GtkWidget *box;
+    GtkWidget *row;
+    GtkWidget *l;
+
+    box = gtk_list_box_new();
+    l = gtk_label_new("assoc_dues");
+    gtk_widget_set_halign(l, GTK_ALIGN_START);
+    g_object_set(l, "xalign", 0.0, NULL);
+    gtk_list_box_insert(GTK_LIST_BOX(box), l, -1);
+
+    l = gtk_label_new("coffee");
+    gtk_list_box_insert(GTK_LIST_BOX(box), l, -1);
+    l = gtk_label_new("commute");
+    gtk_list_box_insert(GTK_LIST_BOX(box), l, -1);
+    l = gtk_label_new("dine_out");
+    gtk_list_box_insert(GTK_LIST_BOX(box), l, -1);
+    l = gtk_label_new("grocery");
+    gtk_list_box_insert(GTK_LIST_BOX(box), l, -1);
+    l = gtk_label_new("household");
+    gtk_list_box_insert(GTK_LIST_BOX(box), l, -1);
+    l = gtk_label_new("pet_food");
+    gtk_list_box_insert(GTK_LIST_BOX(box), l, -1);
+    l = gtk_label_new("utilities");
+    gtk_list_box_insert(GTK_LIST_BOX(box), l, -1);
+
+    return box;
+}
+
+GtkWidget *create_button_group_vertical() {
+    GtkWidget *vbox;
+    GtkWidget *btn_add;
+    GtkWidget *btn_edit;
+    GtkWidget *btn_del;
+
+    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_set_name(vbox, "action-box");
+    btn_add = gtk_button_new_with_label("Add...");
+    btn_edit = gtk_button_new_with_label("Edit");
+    btn_del = gtk_button_new_with_label("Delete");
+
+    gtk_box_pack_start(GTK_BOX(vbox), btn_add, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), btn_edit, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), btn_del, FALSE, FALSE, 0);
+
+    return vbox;
 }
 
