@@ -80,6 +80,7 @@ static void setup_ui(ExpContext *ctx) {
     screen = gdk_screen_get_default();
     provider = gtk_css_provider_new();
     gtk_css_provider_load_from_path(provider, "app.css", NULL);
+    //gtk_css_provider_load_from_path(provider, "gtk-3.0/gtk.css", NULL);
     gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     // mainwin
