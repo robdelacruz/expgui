@@ -206,11 +206,15 @@ static int open_expense_file(ExpContext *ctx, char *xpfile) {
 
     sort_expenses_by_date_desc(ctx->all_xps, ctx->all_xps_count);
     get_expenses_years(ctx->all_xps, ctx->all_xps_count, ctx->expenses_years, countof(ctx->expenses_years));
+    ctx->expenses_cats_count = get_expenses_categories(ctx->all_xps, ctx->all_xps_count, ctx->expenses_cats, countof(ctx->expenses_cats));
+    sort_cats_asc(ctx->expenses_cats, ctx->expenses_cats_count);
     refresh_filter_ui(ctx);
 
     filter_expenses(ctx->all_xps, ctx->all_xps_count,
                     ctx->view_xps, &ctx->view_xps_count,
-                    "", 0, 0);
+                    "",
+                    0, 0,
+                    "");
     refresh_expenses_treeview(GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_count, TRUE);
 
     char statustxt[255];

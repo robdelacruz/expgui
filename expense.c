@@ -18,6 +18,7 @@ static char *read_field_date(char *startp, date_t *dt);
 static char *read_field_double(char *startp, double *field);
 static char *read_field_str(char *startp, str_t *str);
 static void read_xp_line(char *buf, Expense *xp);
+static int array_contains_str(str_t *a[], size_t a_len, str_t *str);
 
 Expense *create_expense(arena_t *arena) {
     Expense *xp = arena_alloc(arena, sizeof(Expense));
@@ -41,9 +42,13 @@ void init_context(ExpContext *ctx, arena_t *arena, arena_t *scratch) {
     memset(ctx->view_xps, 0, sizeof(ctx->view_xps));
     ctx->all_xps_count = 0;
     ctx->view_xps_count = 0;
+    memset(ctx->expenses_years, 0, sizeof(ctx->expenses_years));
+    memset(ctx->expenses_cats, 0, sizeof(ctx->expenses_cats));
+    ctx->expenses_cats_count = 0;
 
     ctx->view_year = 0;
     ctx->view_month = 0;
+    ctx->view_cat = new_str(arena, 10);
     ctx->view_wait_id = 0;
 
     ctx->mainwin = NULL;
@@ -53,9 +58,8 @@ void init_context(ExpContext *ctx, arena_t *arena, arena_t *scratch) {
     ctx->txt_filter = NULL;
     ctx->cb_year = NULL;
     ctx->cb_month = NULL;
+    ctx->cb_cat = NULL;
     ctx->statusbar = NULL;
-
-    memset(ctx->expenses_years, 0, sizeof(ctx->expenses_years));
 }
 
 void reset_context(ExpContext *ctx) {
@@ -64,10 +68,14 @@ void reset_context(ExpContext *ctx) {
     memset(ctx->view_xps, 0, sizeof(ctx->view_xps));
     ctx->all_xps_count = 0;
     ctx->view_xps_count = 0;
+    memset(ctx->expenses_years, 0, sizeof(ctx->expenses_years));
+    memset(ctx->expenses_cats, 0, sizeof(ctx->expenses_cats));
 
     ctx->view_year = 0;
     ctx->view_month = 0;
+    str_assign(&ctx->view_cat, "");
     ctx->view_wait_id = 0;
+
     arena_reset(ctx->arena);
     arena_reset(ctx->scratch);
 }
@@ -188,15 +196,25 @@ static int compare_expense_date_asc(void *xp1, void *xp2) {
         return -1;
     return 0;
 }
-void sort_expenses_by_date_asc(Expense *xps[], size_t xps_len) {
-    sort_array((void **)xps, xps_len, compare_expense_date_asc);
-}
 static int compare_expense_date_desc(void *xp1, void *xp2) {
     return -compare_expense_date_asc(xp1, xp2);
+}
+void sort_expenses_by_date_asc(Expense *xps[], size_t xps_len) {
+    sort_array((void **)xps, xps_len, compare_expense_date_asc);
 }
 void sort_expenses_by_date_desc(Expense *xps[], size_t xps_len) {
     sort_array((void **)xps, xps_len, compare_expense_date_desc);
 }
+
+static int compare_str_asc(void *p1, void *p2) {
+    str_t *str1 = (str_t *)p1;
+    str_t *str2 = (str_t *)p2;
+    return strcmp(str1->s, str2->s);
+}
+void sort_cats_asc(str_t *cats[], size_t cats_len) {
+    sort_array((void **)cats, cats_len, compare_str_asc);
+}
+
 static void swap_array(void *array[], int i, int j) {
     void *tmp = array[i];
     array[i] = array[j];
@@ -229,9 +247,16 @@ void sort_array(void *array[], size_t array_len, CompareFunc compare_func) {
 
 void filter_expenses(Expense *src_xps[], size_t src_xps_len,
                      Expense *dest_xps[], size_t *ret_dest_xps_len,
-                     const char *filter, uint month, uint year) {
+                     char *filter,
+                     uint month, uint year,
+                     char *cat) {
     size_t dest_xps_len;
     size_t count_dest_xps = 0;
+
+    if (strlen(filter) == 0)
+        filter = NULL;
+    if (strlen(cat) == 0)
+        cat = NULL;
 
     for (int i=0; i < src_xps_len; i++) {
         Expense *xp = src_xps[i];
@@ -240,7 +265,9 @@ void filter_expenses(Expense *src_xps[], size_t src_xps_len,
             continue;
         if (year != 0 && xp->dt.year != year)
             continue;
-        if (strcasestr(xp->desc.s, filter) == NULL)
+        if (cat != NULL && strcmp(xp->cat.s, cat) != 0)
+            continue;
+        if (filter != NULL && strcasestr(xp->desc.s, filter) == NULL)
             continue;
 
         dest_xps[count_dest_xps] = xp;
@@ -252,7 +279,7 @@ void filter_expenses(Expense *src_xps[], size_t src_xps_len,
 
 void get_expenses_years(Expense *xps[], size_t xps_len, uint years[], size_t years_size) {
     int lowest_year = 10000;
-    int j = 0;
+    size_t j = 0;
 
     for (int i=0; i < xps_len; i++) {
         Expense *xp = xps[i];
@@ -268,5 +295,33 @@ void get_expenses_years(Expense *xps[], size_t xps_len, uint years[], size_t yea
     }
 
     years[j] = 0;
+}
+
+static int array_contains_str(str_t *a[], size_t a_len, str_t *str) {
+    for (int i=0; i < a_len; i++) {
+        str_t *a_str = a[i];
+        if (strcmp(a_str->s, str->s) == 0) // str in array
+            return 1;
+    }
+    return 0;
+}
+
+size_t get_expenses_categories(Expense *xps[], size_t xps_len, str_t *cats[], size_t cats_size) {
+    size_t count_cats = 0;
+
+    for (int i=0; i < xps_len; i++) {
+        Expense *xp = xps[i];
+        str_t *xp_cat = &xp->cat;
+        if (!array_contains_str(cats, count_cats, xp_cat)) {
+            cats[count_cats] = xp_cat;
+            count_cats++;
+        }
+
+        if (count_cats >= cats_size-1)
+            break;
+    }
+
+    cats[count_cats] = 0;
+    return count_cats;
 }
 
