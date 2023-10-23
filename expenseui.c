@@ -38,8 +38,12 @@ GtkWidget *create_scroll_window(GtkWidget *child) {
     return sw;
 }
 
-GtkWidget *create_frame(gchar *label, GtkWidget *child) {
+GtkWidget *create_frame(gchar *label, GtkWidget *child, int xpadding, int ypadding) {
     GtkWidget *fr = gtk_frame_new(label);
+    if (xpadding > 0)
+        g_object_set(child, "margin-start", xpadding, "margin-end", xpadding, NULL);
+    if (ypadding > 0)
+        g_object_set(child, "margin-top", xpadding, "margin-bottom", xpadding, NULL);
     gtk_container_add(GTK_CONTAINER(fr), child);
     return fr;
 }
@@ -230,7 +234,7 @@ GtkWidget *create_filter_section(ExpContext *ctx) {
      */
 
     table = gtk_table_new(2, 2, FALSE);
-    lbl_filter = gtk_label_new("Filter expenses");
+    lbl_filter = gtk_label_new("Search");
     lbl_year = gtk_label_new("Year");
     lbl_month = gtk_label_new("Month");
     lbl_cat = gtk_label_new("Category");
@@ -243,10 +247,10 @@ GtkWidget *create_filter_section(ExpContext *ctx) {
     gtk_entry_set_placeholder_text(GTK_ENTRY(txt_filter), "Filter Expenses");
     g_object_set(txt_filter, "width-chars", 50, NULL);
 
-    g_object_set(lbl_filter, "xalign", 0.0, NULL);
-    g_object_set(lbl_year, "xalign", 0.0, NULL);
-    g_object_set(lbl_month, "xalign", 0.0, NULL);
-    g_object_set(lbl_cat, "xalign", 0.0, NULL);
+    g_object_set(lbl_filter, "xalign", 0.0, "margin-start", 5,  NULL);
+    g_object_set(lbl_year, "xalign", 0.0, "margin-start", 5,  NULL);
+    g_object_set(lbl_month, "xalign", 0.0, "margin-start", 5,  NULL);
+    g_object_set(lbl_cat, "xalign", 0.0, "margin-start", 5,  NULL);
 
     gtk_table_attach(GTK_TABLE(table), lbl_filter, 0,1, 0,1, GTK_EXPAND | GTK_FILL, GTK_SHRINK, 0,0);
     gtk_table_attach(GTK_TABLE(table), lbl_year,   1,2, 0,1, GTK_EXPAND | GTK_FILL, GTK_SHRINK, 0,0);
@@ -279,28 +283,47 @@ GtkWidget *create_filter_section(ExpContext *ctx) {
 }
 
 void refresh_filter_ui(ExpContext *ctx) {
+    date_t currentdt = current_date();
     GtkComboBoxText *cb_year = GTK_COMBO_BOX_TEXT(ctx->cb_year);
     GtkComboBoxText *cb_month = GTK_COMBO_BOX_TEXT(ctx->cb_month);
     GtkComboBoxText *cb_cat = GTK_COMBO_BOX_TEXT(ctx->cb_cat);
     char syear[5];
+    int is_set_cb_year = 0;
+    int is_set_cb_month = 0;
+
+    ctx->view_year = currentdt.year;
+    ctx->view_month = currentdt.month;
+    str_assign(&ctx->view_cat, "");
 
     gtk_combo_box_text_remove_all(cb_year);
     gtk_combo_box_text_append_text(cb_year, "- all -");
-    gtk_combo_box_set_active(GTK_COMBO_BOX(cb_year), 0);
     for (int i=0; i < countof(ctx->expenses_years); i++) {
         uint year = ctx->expenses_years[i];
         if (year == 0)
             break;
         snprintf(syear, sizeof(syear), "%d", year);
         gtk_combo_box_text_append_text(cb_year, syear);
+
+        if (year == ctx->view_year) {
+            gtk_combo_box_set_active(GTK_COMBO_BOX(cb_year), i+1);
+            is_set_cb_year = 1;
+        }
     }
+    if (!is_set_cb_year)
+        gtk_combo_box_set_active(GTK_COMBO_BOX(cb_year), 0);
 
     gtk_combo_box_text_remove_all(cb_month);
     gtk_combo_box_text_append_text(cb_month, "- all -");
-    gtk_combo_box_set_active(GTK_COMBO_BOX(cb_month), 0);
     for (int i=1; i < countof(month_names); i++) {
         gtk_combo_box_text_append_text(cb_month, month_names[i]);
+
+        if (i == ctx->view_month) {
+            gtk_combo_box_set_active(GTK_COMBO_BOX(cb_month), i);
+            is_set_cb_month = 1;
+        }
     }
+    if (!is_set_cb_month)
+        gtk_combo_box_set_active(GTK_COMBO_BOX(cb_month), 0);
 
     gtk_combo_box_text_remove_all(cb_cat);
     gtk_combo_box_text_append_text(cb_cat, "- all -");
@@ -311,10 +334,6 @@ void refresh_filter_ui(ExpContext *ctx) {
             break;
         gtk_combo_box_text_append_text(cb_cat, cat->s);
     }
-
-    ctx->view_year = 0;
-    ctx->view_month = 0;
-    str_assign(&ctx->view_cat, "");
 }
 
 static void cb_year_changed(GtkWidget *w, gpointer data) {
@@ -326,6 +345,7 @@ static void cb_year_changed(GtkWidget *w, gpointer data) {
     if (syear == NULL)
         return;
     year = atoi(syear);
+    printf("cb_year_changed() year: %d\n", year);
     if (year == ctx->view_year)
         return;
 
@@ -339,6 +359,7 @@ static void cb_month_changed(GtkWidget *w, gpointer data) {
     int month = 0;
 
     month = gtk_combo_box_get_active(GTK_COMBO_BOX(ctx->cb_month));
+    printf("cb_month_changed() month: %d\n", month);
     if (month == -1)
         return;
     if (month == ctx->view_month)

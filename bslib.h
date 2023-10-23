@@ -40,6 +40,7 @@ typedef struct {
 } date_t;
 
 date_t default_date();
+date_t current_date();
 date_t date_from_iso(char *s);
 date_t todays_date();
 void format_date_iso(date_t dt, char buf[], size_t buf_len);

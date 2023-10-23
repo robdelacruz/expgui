@@ -99,9 +99,12 @@ static void setup_ui(ExpContext *ctx) {
     expenses_view = create_expenses_treeview(ctx);
     expenses_sw = create_scroll_window(expenses_view);
     action_group = create_button_group_vertical();
+    g_object_set(action_group, "margin-top", 5, NULL);
+    gtk_widget_set_size_request(action_group, 100, -1);
 
     hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_box_pack_start(GTK_BOX(hbox1), expenses_sw, TRUE, TRUE, 0);
+    //gtk_box_pack_start(GTK_BOX(hbox1), expenses_sw, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox1), create_frame("Expenses", expenses_sw, 10, 10), TRUE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(hbox1), action_group, FALSE, FALSE, 0);
 
     vbox1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
@@ -208,12 +211,12 @@ static int open_expense_file(ExpContext *ctx, char *xpfile) {
     get_expenses_years(ctx->all_xps, ctx->all_xps_count, ctx->expenses_years, countof(ctx->expenses_years));
     ctx->expenses_cats_count = get_expenses_categories(ctx->all_xps, ctx->all_xps_count, ctx->expenses_cats, countof(ctx->expenses_cats));
     sort_cats_asc(ctx->expenses_cats, ctx->expenses_cats_count);
-    refresh_filter_ui(ctx);
 
+    refresh_filter_ui(ctx);
     filter_expenses(ctx->all_xps, ctx->all_xps_count,
                     ctx->view_xps, &ctx->view_xps_count,
                     "",
-                    0, 0,
+                    ctx->view_month, ctx->view_year,
                     "");
     refresh_expenses_treeview(GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_count, TRUE);
 

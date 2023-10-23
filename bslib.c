@@ -30,6 +30,21 @@ date_t default_date() {
     return dt;
 }
 
+date_t current_date() {
+    date_t dt;
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+    if (tm == NULL) {
+        fprintf(stderr, "localtime(): %s\n", strerror(errno));
+        return default_date();
+    }
+
+    dt.month = tm->tm_mon+1;
+    dt.day = tm->tm_mday;
+    dt.year = tm->tm_year + 1900;
+    return dt;
+}
+
 /*** date_t functions ***/
 static int is_valid_date(uint month, uint day, uint year) {
     if (month < 1 || month > 12)
