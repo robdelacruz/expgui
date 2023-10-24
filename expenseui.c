@@ -20,6 +20,8 @@ static void get_expense_from_treeview(GtkTreeView *tv, GtkTreeIter *it, Expense 
 
 static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data);
 static void expense_row_changed(GtkTreeSelection *ts, gpointer data);
+static gboolean expense_view_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer data);
+static void edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, ExpContext *ctx);
 
 static gboolean apply_filter(gpointer data);
 static void txt_filter_changed(GtkWidget *w, gpointer data);
@@ -65,6 +67,9 @@ GtkWidget *create_expenses_treeview(ExpContext *ctx) {
     int ypadding = 2;
 
     tv = gtk_tree_view_new();
+    g_object_set(tv, "enable-search", FALSE, NULL);
+    gtk_widget_add_events(tv, GDK_KEY_PRESS_MASK);
+
     ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
     gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
 
@@ -101,6 +106,7 @@ GtkWidget *create_expenses_treeview(ExpContext *ctx) {
 
     g_signal_connect(tv, "row-activated", G_CALLBACK(expense_row_activated), ctx);
     g_signal_connect(ts, "changed", G_CALLBACK(expense_row_changed), ctx);
+    g_signal_connect(tv, "key-press-event", G_CALLBACK(expense_view_keypress), ctx);
 
     return tv;
 }
@@ -117,16 +123,20 @@ static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTre
 static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
     ExpContext *ctx = data;
     GtkTreeIter it;
+
+    printf("(rowactivated)\n");
+    get_tree_it(tv, tp, &it);
+    edit_expense_row(tv, &it, ctx);
+}
+
+static void edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, ExpContext *ctx) {
     Expense xp;
     ExpenseEditDialog *d;
     gint z;
     arena_t scratch = *ctx->scratch;
 
-    printf("(rowactivated)\n");
-
-    get_tree_it(tv, tp, &it);
     init_expense(&xp, &scratch);
-    get_expense_from_treeview(tv, &it, &xp);
+    get_expense_from_treeview(tv, it, &xp);
     d = create_expense_edit_dialog(&scratch, &xp);
     z = gtk_dialog_run(d->dlg);
     if (z == GTK_RESPONSE_OK) {
@@ -136,7 +146,7 @@ static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewC
         GtkListStore *ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
         get_edit_expense(d, &xp);
         format_date_iso(xp.dt, isodate, sizeof(isodate));
-        gtk_list_store_set(ls, &it, 0, isodate, 1, xp.desc.s, 2, xp.amt, 3, xp.cat.s, -1);
+        gtk_list_store_set(ls, it, 0, isodate, 1, xp.desc.s, 2, xp.amt, 3, xp.cat.s, -1);
     }
     free_expense_edit_dialog(d);
 }
@@ -155,6 +165,33 @@ static void expense_row_changed(GtkTreeSelection *ts, gpointer data) {
     init_expense(&xp, &scratch);
     get_expense_from_treeview(tv, &it, &xp);
     printf("(changed)\n");
+}
+
+static gboolean expense_view_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer data) {
+    ExpContext *ctx = data;
+    GtkTreeSelection *ts;
+    GtkTreeModel *m;
+    GtkTreeIter it;
+
+    ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
+    if (!gtk_tree_selection_get_selected(ts, &m, &it))
+        return FALSE;
+
+    if (e->keyval == GDK_KEY_k) {
+        if (gtk_tree_model_iter_previous(m, &it))
+            gtk_tree_selection_select_iter(ts, &it);
+        return TRUE;
+    } else if (e->keyval == GDK_KEY_j) {
+        if (gtk_tree_model_iter_next(m, &it))
+            gtk_tree_selection_select_iter(ts, &it);
+        return TRUE;
+    } else if (e->keyval == GDK_KEY_e) {
+        edit_expense_row(tv, &it, ctx);
+    } else if (e->keyval == GDK_KEY_Delete || 
+               (e->state == GDK_CONTROL_MASK && e->keyval == GDK_KEY_x)) {
+    }
+
+    return FALSE;
 }
 
 static void get_tree_it(GtkTreeView *tv, GtkTreePath *tp, GtkTreeIter *it) {
