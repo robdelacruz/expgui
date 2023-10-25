@@ -122,10 +122,15 @@ static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTre
 
 static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
     ExpContext *ctx = data;
+    GtkTreeSelection *ts;
+    GtkTreeModel *m;
     GtkTreeIter it;
 
-    printf("(rowactivated)\n");
-    get_tree_it(tv, tp, &it);
+    //get_tree_it(tv, tp, &it);
+
+    ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
+    if (!gtk_tree_selection_get_selected(ts, &m, &it))
+        return;
     edit_expense_row(tv, &it, ctx);
 }
 
@@ -162,9 +167,8 @@ static void expense_row_changed(GtkTreeSelection *ts, gpointer data) {
     if (!gtk_tree_selection_get_selected(ts, (GtkTreeModel **)&ls, &it))
         return;
     tv = gtk_tree_selection_get_tree_view(ts);
-    init_expense(&xp, &scratch);
-    get_expense_from_treeview(tv, &it, &xp);
-    printf("(changed)\n");
+    //init_expense(&xp, &scratch);
+    //get_expense_from_treeview(tv, &it, &xp);
 }
 
 static gboolean expense_view_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer data) {
@@ -172,23 +176,34 @@ static gboolean expense_view_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer 
     GtkTreeSelection *ts;
     GtkTreeModel *m;
     GtkTreeIter it;
+    GtkTreePath *tp;
+    uint kv = e->keyval;
 
     ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
     if (!gtk_tree_selection_get_selected(ts, &m, &it))
         return FALSE;
 
-    if (e->keyval == GDK_KEY_k) {
-        if (gtk_tree_model_iter_previous(m, &it))
-            gtk_tree_selection_select_iter(ts, &it);
+    if (kv == GDK_KEY_k) {
+        if (!gtk_tree_model_iter_previous(m, &it))
+            return FALSE;
+        gtk_tree_selection_select_iter(ts, &it);
+        tp = gtk_tree_model_get_path(m, &it);
+        gtk_tree_view_set_cursor(tv, tp, NULL, FALSE);
+        gtk_tree_path_free(tp);
         return TRUE;
-    } else if (e->keyval == GDK_KEY_j) {
-        if (gtk_tree_model_iter_next(m, &it))
-            gtk_tree_selection_select_iter(ts, &it);
+    } else if (kv == GDK_KEY_j) {
+        if (!gtk_tree_model_iter_next(m, &it))
+            return FALSE;
+        gtk_tree_selection_select_iter(ts, &it);
+        tp = gtk_tree_model_get_path(m, &it);
+        gtk_tree_view_set_cursor(tv, tp, NULL, FALSE);
+        gtk_tree_path_free(tp);
         return TRUE;
-    } else if (e->keyval == GDK_KEY_e) {
+    } else if (kv == GDK_KEY_e) {
         edit_expense_row(tv, &it, ctx);
-    } else if (e->keyval == GDK_KEY_Delete || 
-               (e->state == GDK_CONTROL_MASK && e->keyval == GDK_KEY_x)) {
+        return TRUE;
+    } else if (kv == GDK_KEY_Delete || 
+               (e->state == GDK_CONTROL_MASK && kv == GDK_KEY_x)) {
     }
 
     return FALSE;
