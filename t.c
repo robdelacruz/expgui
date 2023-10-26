@@ -59,9 +59,6 @@ void panic(const char *s) {
 }
 
 static void setup_ui(ExpContext *ctx) {
-    GdkScreen *screen;
-    GtkCssProvider *provider;
-
     GtkWidget *mainwin;
     GtkWidget *menubar;
     GtkWidget *statusbar;
@@ -76,11 +73,11 @@ static void setup_ui(ExpContext *ctx) {
     GtkWidget *main_vbox;
     GtkWidget *filter_box;
 
-    screen = gdk_screen_get_default();
-    provider = gtk_css_provider_new();
-    gtk_css_provider_load_from_path(provider, "app.css", NULL);
-    //gtk_css_provider_load_from_path(provider, "gtk-3.0/gtk.css", NULL);
-    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+//    GdkScreen *screen = gdk_screen_get_default();
+//    GtkCssProvider *provider = gtk_css_provider_new();
+//    gtk_css_provider_load_from_path(provider, "app.css", NULL);
+//    gtk_css_provider_load_from_path(provider, "gtk-3.0/gtk.css", NULL);
+//    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     // mainwin
     mainwin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
