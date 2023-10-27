@@ -18,6 +18,9 @@ static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin);
 static int open_expense_file(ExpContext *ctx, char *xpfile);
 
 static void file_open(GtkWidget *w, gpointer data);
+static void file_new(GtkWidget *w, gpointer data);
+static void file_save(GtkWidget *w, gpointer data);
+static void file_saveas(GtkWidget *w, gpointer data);
 
 int main(int argc, char *argv[]) {
     arena_t app_arena, scratch;
@@ -72,12 +75,6 @@ static void setup_ui(ExpContext *ctx) {
 
     GtkWidget *main_vbox;
     GtkWidget *filter_box;
-
-//    GdkScreen *screen = gdk_screen_get_default();
-//    GtkCssProvider *provider = gtk_css_provider_new();
-//    gtk_css_provider_load_from_path(provider, "app.css", NULL);
-//    gtk_css_provider_load_from_path(provider, "gtk-3.0/gtk.css", NULL);
-//    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
     // mainwin
     mainwin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -134,33 +131,62 @@ static void setup_ui(ExpContext *ctx) {
 }
 
 static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin) {
-    GtkWidget *menubar;
-    GtkWidget *filemenu, *mi_file, *mi_file_new, *mi_file_open, *mi_file_quit;
-    GtkAccelGroup *accel;
+    GtkWidget *mb;
+    GtkWidget *m;
+    GtkWidget *mi_file, *mi_file_new, *mi_file_open, *mi_file_save, *mi_file_saveas, *mi_file_quit;
+    GtkWidget *mi_expense, *mi_expense_new, *mi_expense_edit, *mi_expense_delete;
+    GtkAccelGroup *a;
 
-    menubar = gtk_menu_bar_new();
-    filemenu = gtk_menu_new();
     mi_file = gtk_menu_item_new_with_mnemonic("_File");
     mi_file_new = gtk_menu_item_new_with_mnemonic("_New");
     mi_file_open = gtk_menu_item_new_with_mnemonic("_Open");
+    mi_file_save = gtk_menu_item_new_with_mnemonic("_Save");
+    mi_file_saveas = gtk_menu_item_new_with_mnemonic("Save _As");
     mi_file_quit = gtk_menu_item_new_with_mnemonic("_Quit");
-    gtk_menu_item_set_submenu(GTK_MENU_ITEM(mi_file), filemenu);
-    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), mi_file_new);
-    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), mi_file_open);
-    gtk_menu_shell_append(GTK_MENU_SHELL(filemenu), mi_file_quit);
-    gtk_menu_shell_append(GTK_MENU_SHELL(menubar), mi_file);
 
-    g_signal_connect(mi_file_open, "activate", G_CALLBACK(file_open), ctx);
-    g_signal_connect(mi_file_quit, "activate", G_CALLBACK(gtk_main_quit), NULL);
+    mi_expense = gtk_menu_item_new_with_mnemonic("_Expense");
+    mi_expense_new = gtk_menu_item_new_with_mnemonic("_New");
+    mi_expense_edit = gtk_menu_item_new_with_mnemonic("_Edit");
+    mi_expense_delete = gtk_menu_item_new_with_mnemonic("_Delete");
+
+    m = gtk_menu_new();
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_file_new);
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_file_open);
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_file_save);
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_file_saveas);
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_file_quit);
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(mi_file), m);
+
+    m = gtk_menu_new();
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_expense_new);
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_expense_edit);
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_expense_delete);
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(mi_expense), m);
+
+    mb = gtk_menu_bar_new();
+    gtk_menu_shell_append(GTK_MENU_SHELL(mb), mi_file);
+    gtk_menu_shell_append(GTK_MENU_SHELL(mb), mi_expense);
 
     // accelerators
-    accel = gtk_accel_group_new();
-    gtk_window_add_accel_group(GTK_WINDOW(mainwin), accel);
-    gtk_widget_add_accelerator(mi_file_new, "activate", accel, GDK_KEY_N, GDK_SHIFT_MASK | GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
-    gtk_widget_add_accelerator(mi_file_open, "activate", accel, GDK_KEY_O, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
-    gtk_widget_add_accelerator(mi_file_quit, "activate", accel, GDK_KEY_Q, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
+    a = gtk_accel_group_new();
+    gtk_window_add_accel_group(GTK_WINDOW(mainwin), a);
+    add_accel(mi_file_new, a, GDK_KEY_N, GDK_CONTROL_MASK);   
+    add_accel(mi_file_open, a, GDK_KEY_O, GDK_CONTROL_MASK);   
+    add_accel(mi_file_save, a, GDK_KEY_S, GDK_CONTROL_MASK);   
+    add_accel(mi_file_saveas, a, GDK_KEY_S, GDK_SHIFT_MASK | GDK_CONTROL_MASK);   
+    add_accel(mi_file_quit, a, GDK_KEY_Q, GDK_CONTROL_MASK);   
 
-    return menubar;
+    add_accel(mi_expense_new, a, GDK_KEY_N, 0);
+    add_accel(mi_expense_delete, a, GDK_KEY_X, GDK_CONTROL_MASK);
+
+    g_signal_connect(mi_file_new, "activate", G_CALLBACK(file_new), ctx);
+    g_signal_connect(mi_file_open, "activate", G_CALLBACK(file_open), ctx);
+    g_signal_connect(mi_file_save, "activate", G_CALLBACK(file_save), ctx);
+    g_signal_connect(mi_file_saveas, "activate", G_CALLBACK(file_saveas), ctx);
+
+    g_signal_connect(mi_file_quit, "activate", G_CALLBACK(gtk_main_quit), NULL);
+
+    return mb;
 }
 
 static void file_open(GtkWidget *w, gpointer data) {
@@ -189,6 +215,13 @@ exit:
     if (xpfile != NULL)
         g_free(xpfile);
     gtk_widget_destroy(dlg);
+}
+
+static void file_new(GtkWidget *w, gpointer data) {
+}
+static void file_save(GtkWidget *w, gpointer data) {
+}
+static void file_saveas(GtkWidget *w, gpointer data) {
 }
 
 static int open_expense_file(ExpContext *ctx, char *xpfile) {

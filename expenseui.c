@@ -32,6 +32,13 @@ static void cancel_wait_id(guint *wait_id);
 
 static char *month_names[] = {"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
+void set_screen_css(char *cssfile) {
+    GdkScreen *screen = gdk_screen_get_default();
+    GtkCssProvider *provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_path(provider, cssfile, NULL);
+    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+}
+
 GtkWidget *create_scroll_window(GtkWidget *child) {
     GtkWidget *sw = gtk_scrolled_window_new(NULL, NULL);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw), GTK_POLICY_AUTOMATIC, GTK_POLICY_ALWAYS);
@@ -54,6 +61,10 @@ GtkWidget *create_label_with_margin(gchar *s, int start, int end, int top, int b
     GtkWidget *l = gtk_label_new(s);
     g_object_set(l, "margin-start", start, "margin-end", end, "margin-top", top, "margin-bottom", bottom, NULL);
     return l;
+}
+
+void add_accel(GtkWidget *w, GtkAccelGroup *a, guint key, GdkModifierType mods) {
+    gtk_widget_add_accelerator(w, "activate", a, key, mods, GTK_ACCEL_VISIBLE);
 }
 
 GtkWidget *create_expenses_treeview(ExpContext *ctx) {
