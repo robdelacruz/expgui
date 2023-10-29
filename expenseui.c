@@ -124,7 +124,7 @@ GtkWidget *create_expenses_treeview(ExpContext *ctx) {
     gtk_cell_renderer_set_padding(r, xpadding, ypadding);
     gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
 
-    ls = gtk_list_store_new(4, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_DOUBLE, G_TYPE_STRING);
+    ls = gtk_list_store_new(5, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_DOUBLE, G_TYPE_STRING, G_TYPE_UINT);
     gtk_tree_view_set_model(GTK_TREE_VIEW(tv), GTK_TREE_MODEL(ls));
     g_object_unref(ls);
 
@@ -260,14 +260,16 @@ static void get_expense_from_treeview(GtkTreeView *tv, GtkTreeIter *it, Expense 
     gchar *desc;
     gdouble amt;
     gchar *cat;
+    guint rowid;
 
     ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
-    gtk_tree_model_get(GTK_TREE_MODEL(ls), it, 0, &sdate, 1, &desc, 2, &amt, 3, &cat, -1);
+    gtk_tree_model_get(GTK_TREE_MODEL(ls), it, 0, &sdate, 1, &desc, 2, &amt, 3, &cat, 4, &rowid, -1);
     xp->dt = date_from_iso(sdate);
     str_assign(&xp->time, "");
     str_assign(&xp->desc, desc);
     str_assign(&xp->cat, cat);
     xp->amt = amt;
+    xp->rowid = rowid;
 
     g_free(sdate);
     g_free(desc);
@@ -297,7 +299,13 @@ void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, 
         format_date_iso(xp->dt, isodate, sizeof(isodate));
 
         gtk_list_store_append(ls, &it);
-        gtk_list_store_set(ls, &it, 0, isodate, 1, xp->desc.s, 2, xp->amt, 3, xp->cat.s, -1);
+        gtk_list_store_set(ls, &it, 
+                           0, isodate,
+                           1, xp->desc.s,
+                           2, xp->amt,
+                           3, xp->cat.s,
+                           4, xp->rowid,
+                           -1);
     }
 
     gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
@@ -417,7 +425,6 @@ static void cb_year_changed(GtkWidget *w, gpointer data) {
     if (syear == NULL)
         return;
     year = atoi(syear);
-    printf("cb_year_changed() year: %d\n", year);
     if (year == ctx->view_year)
         return;
 
@@ -431,7 +438,6 @@ static void cb_month_changed(GtkWidget *w, gpointer data) {
     int month = 0;
 
     month = gtk_combo_box_get_active(GTK_COMBO_BOX(ctx->cb_month));
-    printf("cb_month_changed() month: %d\n", month);
     if (month == -1)
         return;
     if (month == ctx->view_month)
@@ -484,7 +490,6 @@ static gboolean apply_filter(gpointer data) {
     const gchar *sfilter;
 
     sfilter = gtk_entry_get_text(GTK_ENTRY(ctx->txt_filter));
-    printf("filter: '%s', year: %d, month: %d\n", sfilter, ctx->view_year, ctx->view_month);
     filter_expenses(ctx->all_xps, ctx->all_xps_count,
                     ctx->view_xps, &ctx->view_xps_count,
                     (gchar *)sfilter,

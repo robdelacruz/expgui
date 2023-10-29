@@ -9,6 +9,7 @@
 typedef int (*CompareFunc)(void *a, void *b);
 
 typedef struct {
+    uint rowid;
     date_t dt;
     str_t time;
     str_t desc;

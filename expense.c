@@ -27,6 +27,7 @@ Expense *create_expense(arena_t *arena) {
 }
 
 void init_expense(Expense *xp, arena_t *arena) {
+    xp->rowid = 0;
     xp->dt = default_date();
     xp->time = new_str(arena, 5);
     xp->desc = new_str(arena, 0);
@@ -65,7 +66,6 @@ void init_context(ExpContext *ctx, arena_t *arena, arena_t *scratch) {
 }
 
 void reset_context(ExpContext *ctx) {
-    str_assign(&ctx->xpfile, "");
     memset(ctx->all_xps, 0, sizeof(ctx->all_xps));
     memset(ctx->view_xps, 0, sizeof(ctx->view_xps));
     ctx->all_xps_count = 0;
@@ -75,11 +75,13 @@ void reset_context(ExpContext *ctx) {
 
     ctx->view_year = 0;
     ctx->view_month = 0;
-    str_assign(&ctx->view_cat, "");
     ctx->view_wait_id = 0;
 
     arena_reset(ctx->arena);
     arena_reset(ctx->scratch);
+
+    ctx->xpfile = new_str(ctx->arena, STR_SMALL);
+    ctx->view_cat = new_str(ctx->arena, 10);
 }
 
 // Return 0 for success, 1 for failure with errno set.
@@ -105,6 +107,7 @@ void load_expense_file(FILE *f, Expense *xps[], size_t xps_size, size_t *ret_cou
         chomp(buf);
 
         xp = create_expense(arena);
+        xp->rowid = count_xps;
         read_xp_line(buf, xp);
         xps[count_xps] = xp;
         count_xps++;
@@ -255,6 +258,8 @@ void filter_expenses(Expense *src_xps[], size_t src_xps_len,
     size_t dest_xps_len;
     size_t count_dest_xps = 0;
 
+    printf("filter_expenses() filter: '%s' year: %d month: %d cat: '%s'\n", filter, year, month, cat);
+
     if (strlen(filter) == 0)
         filter = NULL;
     if (strlen(cat) == 0)
@@ -262,7 +267,6 @@ void filter_expenses(Expense *src_xps[], size_t src_xps_len,
 
     for (int i=0; i < src_xps_len; i++) {
         Expense *xp = src_xps[i];
-
         if (month != 0 && xp->dt.month != month)
             continue;
         if (year != 0 && xp->dt.year != year)
