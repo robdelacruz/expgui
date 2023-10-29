@@ -58,7 +58,9 @@ void init_context(ExpContext *ctx, arena_t *arena, arena_t *scratch) {
     ctx->txt_filter = NULL;
     ctx->cb_year = NULL;
     ctx->cb_month = NULL;
-    ctx->cb_cat = NULL;
+    ctx->btn_add = NULL;
+    ctx->btn_edit = NULL;
+    ctx->btn_del = NULL;
     ctx->statusbar = NULL;
 }
 

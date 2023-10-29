@@ -40,7 +40,9 @@ typedef struct {
     GtkWidget *txt_filter;
     GtkWidget *cb_year;
     GtkWidget *cb_month;
-    GtkWidget *cb_cat;
+    GtkWidget *btn_add;
+    GtkWidget *btn_edit;
+    GtkWidget *btn_del;
     GtkWidget *statusbar;
 } ExpContext;
 
