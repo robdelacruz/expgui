@@ -35,6 +35,15 @@ void init_expense(Expense *xp, arena_t *arena) {
     xp->cat = new_str(arena, 10);
 }
 
+void copy_xp(Expense *destxp, Expense *srcxp) {
+    destxp->dt = srcxp->dt;
+    str_assign(&destxp->time, srcxp->time.s);
+    str_assign(&destxp->desc, srcxp->desc.s);
+    str_assign(&destxp->cat, srcxp->cat.s);
+    destxp->amt = srcxp->amt;
+    destxp->rowid = srcxp->rowid;
+}
+
 void init_context(ExpContext *ctx, arena_t *arena, arena_t *scratch) {
     ctx->arena = arena;
     ctx->scratch = scratch;
@@ -257,6 +266,7 @@ void filter_expenses(Expense *src_xps[], size_t src_xps_len,
                      char *cat) {
     size_t dest_xps_len;
     size_t count_dest_xps = 0;
+    Expense *xp;
 
     printf("filter_expenses() filter: '%s' year: %d month: %d cat: '%s'\n", filter, year, month, cat);
 
@@ -266,7 +276,7 @@ void filter_expenses(Expense *src_xps[], size_t src_xps_len,
         cat = NULL;
 
     for (int i=0; i < src_xps_len; i++) {
-        Expense *xp = src_xps[i];
+        xp = src_xps[i];
         if (month != 0 && xp->dt.month != month)
             continue;
         if (year != 0 && xp->dt.year != year)
@@ -329,5 +339,28 @@ size_t get_expenses_categories(Expense *xps[], size_t xps_len, str_t *cats[], si
 
     cats[count_cats] = 0;
     return count_cats;
+}
+
+void update_expense(Expense *savexp, ExpContext *ctx) {
+    Expense *xp;
+    for (int i=0; i < ctx->all_xps_count; i++) {
+        xp = ctx->all_xps[i];
+        if (xp->rowid == savexp->rowid) {
+            copy_xp(xp, savexp);
+            return;
+        }
+    }
+}
+
+void add_expense(Expense *newxp, ExpContext *ctx) {
+    assert(ctx->all_xps_count <= countof(ctx->all_xps));
+
+    if (ctx->all_xps_count == countof(ctx->all_xps)) {
+        printf("Maximum number of expenses (%ld) reached. Can't add expense.\n", countof(ctx->all_xps));
+        return;
+    }
+
+    copy_xp(ctx->all_xps[ctx->all_xps_count], newxp);
+    ctx->all_xps_count++;
 }
 

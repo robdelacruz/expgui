@@ -49,6 +49,8 @@ typedef struct {
 
 Expense *create_expense(arena_t *arena);
 void init_expense(Expense *xp, arena_t *arena);
+void copy_xp(Expense *destxp, Expense *srcxp);
+
 void init_context(ExpContext *ctx, arena_t *arena, arena_t *scratch);
 void reset_context(ExpContext *ctx);
 
@@ -66,6 +68,9 @@ void filter_expenses(Expense *src_xps[], size_t src_xps_len,
 
 void get_expenses_years(Expense *xps[], size_t xps_len, uint years[], size_t years_size);
 size_t get_expenses_categories(Expense *xps[], size_t xps_len, str_t *cats[], size_t cats_size);
+
+void update_expense(Expense *savexp, ExpContext *ctx);
+void add_expense(Expense *newxp, ExpContext *ctx);
 
 #endif
 

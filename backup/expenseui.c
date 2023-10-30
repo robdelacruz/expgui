@@ -9,6 +9,10 @@
 
 #include "expenseui.h"
 
+static ExpenseEditDialog *create_expense_edit_dialog(arena_t *arena, Expense *xp);
+static void free_expense_edit_dialog(ExpenseEditDialog *d);
+static void get_edit_expense(ExpenseEditDialog *d, Expense *xp);
+
 static void currency_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data);
 static void date_insert_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data);
 static void date_delete_text_event(GtkEntry* ed, gint startpos, gint endpos, gpointer data);
@@ -25,16 +29,13 @@ static gboolean expense_view_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer 
 static void txt_filter_changed(GtkWidget *w, gpointer data);
 static void cb_year_changed(GtkWidget *w, gpointer data);
 static void cb_month_changed(GtkWidget *w, gpointer data);
+static void cb_cat_changed(GtkWidget *w, gpointer data);
 static void cancel_wait_id(guint *wait_id);
 static gboolean apply_filter(gpointer data);
 
 static void add_clicked(GtkButton *w, gpointer data);
 static void edit_clicked(GtkButton *w, gpointer data);
 static void del_clicked(GtkButton *w, gpointer data);
-
-static ExpenseEditDialog *create_expense_edit_dialog(arena_t *arena, Expense *xp);
-static void free_expense_edit_dialog(ExpenseEditDialog *d);
-static void get_edit_expense(ExpenseEditDialog *d, Expense *xp);
 
 static char *month_names[] = {"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
@@ -125,8 +126,6 @@ GtkWidget *create_expenses_treeview(ExpContext *ctx) {
     gtk_tree_view_set_model(GTK_TREE_VIEW(tv), GTK_TREE_MODEL(ls));
     g_object_unref(ls);
 
-    gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(ls), 0, GTK_SORT_DESCENDING);
-
     g_signal_connect(tv, "row-activated", G_CALLBACK(expense_row_activated), ctx);
     g_signal_connect(ts, "changed", G_CALLBACK(expense_row_changed), ctx);
     g_signal_connect(tv, "key-press-event", G_CALLBACK(expense_view_keypress), ctx);
@@ -159,32 +158,22 @@ void edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, ExpContext *ctx) {
     Expense xp;
     ExpenseEditDialog *d;
     gint z;
-//    char isodate[ISO_DATE_LEN+1];
     arena_t scratch = *ctx->scratch;
-    uint rowid;
-    int updated = 0;
 
     init_expense(&xp, &scratch);
     get_expense_from_treeview(tv, it, &xp);
-    rowid = xp.rowid;
-
     d = create_expense_edit_dialog(&scratch, &xp);
     z = gtk_dialog_run(d->dlg);
     if (z == GTK_RESPONSE_OK) {
+        char isodate[ISO_DATE_LEN+1];
+        format_date_iso(xp.dt, isodate, sizeof(isodate));
+
         GtkListStore *ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
         get_edit_expense(d, &xp);
-        assert(xp.rowid == rowid);
-
-        update_expense(&xp, ctx);
-        updated = 1;
-
-//        format_date_iso(xp.dt, isodate, sizeof(isodate));
-//        gtk_list_store_set(ls, it, 0, isodate, 1, xp.desc.s, 2, xp.amt, 3, xp.cat.s, -1);
+        format_date_iso(xp.dt, isodate, sizeof(isodate));
+        gtk_list_store_set(ls, it, 0, isodate, 1, xp.desc.s, 2, xp.amt, 3, xp.cat.s, -1);
     }
     free_expense_edit_dialog(d);
-
-    if (updated)
-        apply_filter(ctx);
 }
 
 static void expense_row_changed(GtkTreeSelection *ts, gpointer data) {
@@ -194,7 +183,6 @@ static void expense_row_changed(GtkTreeSelection *ts, gpointer data) {
     GtkTreeIter it;
     Expense xp;
     arena_t scratch = *ctx->scratch;
-    printf("expense_row_changed()\n");
 
     if (!gtk_tree_selection_get_selected(ts, (GtkTreeModel **)&ls, &it))
         return;
@@ -273,24 +261,14 @@ void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, 
     GtkTreeSelection *ts;
     char isodate[ISO_DATE_LEN+1];
     Expense *xp;
-    uint cur_rowid = 0;
-
-    ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(tv)));
-    assert(ls != NULL);
-
-    // (a) Remember active row to be restored later.
-    gtk_tree_view_get_cursor(tv, &tp, NULL);
-    if (tp) {
-        gtk_tree_model_get_iter(GTK_TREE_MODEL(ls), &it, tp);
-        gtk_tree_model_get(GTK_TREE_MODEL(ls), &it, 4, &cur_rowid, -1);
-        printf("cur_rowid: %d\n", cur_rowid);
-    }
-    gtk_tree_path_free(tp);
 
     // Turn off selection while refreshing treeview so we don't get
     // bombarded by 'change' events.
-//    ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
-//    gtk_tree_selection_set_mode(ts, GTK_SELECTION_NONE);
+    ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
+    gtk_tree_selection_set_mode(ts, GTK_SELECTION_NONE);
+
+    ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(tv)));
+    assert(ls != NULL);
 
     gtk_list_store_clear(ls);
 
@@ -306,17 +284,9 @@ void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, 
                            3, xp->cat.s,
                            4, xp->rowid,
                            -1);
-
-        // (a) Restore previously active row.
-        if (xp->rowid == cur_rowid) {
-            tp = gtk_tree_model_get_path(GTK_TREE_MODEL(ls), &it);
-            gtk_tree_view_set_cursor(tv, tp, NULL, FALSE);
-            printf("restored cursor: %d\n", xp->rowid);
-            gtk_tree_path_free(tp);
-        }
     }
 
-//    gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
+    gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
 
     if (reset_cursor) {
         tp = gtk_tree_path_new_from_string("0");
@@ -424,12 +394,6 @@ void refresh_filter_ui(ExpContext *ctx) {
         gtk_combo_box_set_active(GTK_COMBO_BOX(cb_month), 0);
 }
 
-static void txt_filter_changed(GtkWidget *w, gpointer data) {
-    ExpContext *ctx = data;
-
-    cancel_wait_id(&ctx->view_wait_id);
-    ctx->view_wait_id = g_timeout_add(200, apply_filter, data);
-}
 static void cb_year_changed(GtkWidget *w, gpointer data) {
     ExpContext *ctx = data;
     gchar *syear;
@@ -446,6 +410,7 @@ static void cb_year_changed(GtkWidget *w, gpointer data) {
     ctx->view_year = year;
     apply_filter(ctx);
 }
+
 static void cb_month_changed(GtkWidget *w, gpointer data) {
     ExpContext *ctx = data;
     int month = 0;
@@ -460,6 +425,37 @@ static void cb_month_changed(GtkWidget *w, gpointer data) {
     ctx->view_month = month;
     apply_filter(ctx);
 }
+
+static void cb_cat_changed(GtkWidget *w, gpointer data) {
+    ExpContext *ctx = data;
+    gchar *cat;
+    int fromcb = 0;
+
+    if (gtk_combo_box_get_active(GTK_COMBO_BOX(w)) <= 0) {
+        cat = "";
+    } else {
+        cat = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(w));
+        fromcb = 1;
+    }
+    if (strcmp(cat, ctx->view_cat.s) == 0)
+        goto exit;
+
+    cancel_wait_id(&ctx->view_wait_id);
+    str_assign(&ctx->view_cat, cat);
+    apply_filter(ctx);
+
+exit:
+    if (fromcb)
+        g_free(cat);
+}
+
+static void txt_filter_changed(GtkWidget *w, gpointer data) {
+    ExpContext *ctx = data;
+
+    cancel_wait_id(&ctx->view_wait_id);
+    ctx->view_wait_id = g_timeout_add(200, apply_filter, data);
+}
+
 static void cancel_wait_id(guint *wait_id) {
     if (*wait_id != 0) {
         g_source_remove(*wait_id);
@@ -477,7 +473,7 @@ static gboolean apply_filter(gpointer data) {
                     (gchar *)sfilter,
                     ctx->view_month, ctx->view_year,
                     ctx->view_cat.s);
-    refresh_expenses_treeview(GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_count, FALSE);
+    refresh_expenses_treeview(GTK_TREE_VIEW(ctx->expenses_view), ctx->view_xps, ctx->view_xps_count, TRUE);
 
     ctx->view_wait_id = 0;
     return G_SOURCE_REMOVE;
