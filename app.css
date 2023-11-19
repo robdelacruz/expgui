@@ -1,0 +1,19 @@
+window {
+    background: #16181c;
+}
+
+treeview {
+    background: #111827;
+    color: #ffb000;
+}
+
+.view button {
+    background: #16181c;
+    color: #ffb000;
+}
+
+frame {
+    background: #272628;
+    color: #ffb000;
+}
+
