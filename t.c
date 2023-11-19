@@ -35,6 +35,7 @@ int main(int argc, char *argv[]) {
 
     gtk_init(&argc, &argv);
     setup_ui(&ctx);
+//    set_screen_css("app.css");
 
     if (argc > 1) {
         z = open_expense_file(&ctx, argv[1]);
@@ -68,10 +69,10 @@ static void setup_ui(ExpContext *ctx) {
     GtkWidget *menubar;
     GtkWidget *statusbar;
 
-    //GtkWidget *notebook;
     GtkWidget *expenses_sw;
     GtkWidget *expenses_view;
-    GtkWidget *action_group;
+    GtkWidget *expenses_frame;
+    GtkWidget *sidebar;
     GtkWidget *hbox1;
     GtkWidget *vbox1;
 
@@ -92,26 +93,18 @@ static void setup_ui(ExpContext *ctx) {
     gtk_statusbar_push(GTK_STATUSBAR(statusbar), statusid, "Expense Buddy GUI");
 
     filter_box = create_filter_section(ctx);
-    expenses_view = create_expenses_treeview(ctx);
-    expenses_sw = create_scroll_window(expenses_view);
-    action_group = create_button_group_vertical(ctx);
-    g_object_set(action_group, "margin-top", 5, NULL);
-    gtk_widget_set_size_request(action_group, 100, -1);
+    expenses_frame = create_expenses_section(ctx);
+    sidebar = create_sidebar_controls(ctx);
+    //g_object_set(sidebar, "margin-top", 5, NULL);
+    gtk_widget_set_size_request(sidebar, 100, -1);
 
     hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    //gtk_box_pack_start(GTK_BOX(hbox1), expenses_sw, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(hbox1), create_frame("Expenses", expenses_sw, 10, 10), TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(hbox1), action_group, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox1), sidebar, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox1), expenses_frame, TRUE, TRUE, 0);
 
     vbox1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
     g_object_set(vbox1, "margin-start", 10, "margin-end", 10, "margin-top", 10, NULL);
-    gtk_box_pack_start(GTK_BOX(vbox1), filter_box, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox1), hbox1, TRUE, TRUE, 0);
-
-    //notebook = gtk_notebook_new();
-    //gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_TOP);
-    //g_object_set(notebook, "margin-start", 10, "margin-end", 10, NULL);
-    //gtk_notebook_append_page(GTK_NOTEBOOK(notebook), expenses_sw, gtk_label_new("Expenses"));
 
     // Main window
     main_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -123,12 +116,10 @@ static void setup_ui(ExpContext *ctx) {
 
     g_signal_connect(mainwin, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
-    gtk_widget_grab_focus(expenses_view);
+    gtk_widget_grab_focus(ctx->expenses_view);
 
     ctx->mainwin = mainwin;
     ctx->menubar = menubar;
-    //ctx->notebook = notebook;
-    ctx->expenses_view = expenses_view;
     ctx->statusbar = statusbar;
 }
 

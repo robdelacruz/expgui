@@ -73,17 +73,21 @@ void add_accel(GtkWidget *w, GtkAccelGroup *a, guint key, GdkModifierType mods) 
     gtk_widget_add_accelerator(w, "activate", a, key, mods, GTK_ACCEL_VISIBLE);
 }
 
-GtkWidget *create_expenses_treeview(ExpContext *ctx) {
+GtkWidget *create_expenses_section(ExpContext *ctx) {
+    GtkWidget *frame;
+    GtkWidget *vbox;
     GtkWidget *tv;
     GtkWidget *sw;
     GtkTreeSelection *ts;
     GtkCellRenderer *r;
     GtkTreeViewColumn *col;
     GtkListStore *ls;
+    GtkWidget *txt_filter;
     int xpadding = 10;
     int ypadding = 2;
 
     tv = gtk_tree_view_new();
+    sw = create_scroll_window(tv);
     g_object_set(tv, "enable-search", FALSE, NULL);
     gtk_widget_add_events(tv, GDK_KEY_PRESS_MASK);
 
@@ -124,14 +128,25 @@ GtkWidget *create_expenses_treeview(ExpContext *ctx) {
     ls = gtk_list_store_new(5, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_DOUBLE, G_TYPE_STRING, G_TYPE_UINT);
     gtk_tree_view_set_model(GTK_TREE_VIEW(tv), GTK_TREE_MODEL(ls));
     g_object_unref(ls);
-
     gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(ls), 0, GTK_SORT_DESCENDING);
+
+    txt_filter = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(txt_filter), "Filter Expenses");
+
+    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_box_pack_start(GTK_BOX(vbox), txt_filter, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), sw, TRUE, TRUE, 0);
+    //frame = create_frame("Expenses", vbox, 4, 0);
+    frame = create_frame("", vbox, 4, 0);
 
     g_signal_connect(tv, "row-activated", G_CALLBACK(expense_row_activated), ctx);
     g_signal_connect(ts, "changed", G_CALLBACK(expense_row_changed), ctx);
     g_signal_connect(tv, "key-press-event", G_CALLBACK(expense_view_keypress), ctx);
+    g_signal_connect(txt_filter, "changed", G_CALLBACK(txt_filter_changed), ctx);
 
-    return tv;
+    ctx->expenses_view = tv;
+    ctx->txt_filter = txt_filter;
+    return frame;
 }
 
 static void currency_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data) {
@@ -703,7 +718,32 @@ GtkWidget *create_cat_listbox() {
     return box;
 }
 
-GtkWidget *create_button_group_vertical(ExpContext *ctx) {
+GtkWidget *create_sidebar_controls(ExpContext *ctx) {
+    GtkWidget *frame;
+    GtkWidget *vbox;
+    GtkWidget *lbl;
+    GtkWidget *cb_year;
+    GtkWidget *cb_month;
+
+    lbl = gtk_label_new("Time Period:");
+    g_object_set(lbl, "xalign", 0.0,  NULL);
+    cb_year = gtk_combo_box_text_new();
+    cb_month = gtk_combo_box_text_new();
+
+    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), lbl, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), cb_year, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox), cb_month, FALSE, FALSE, 0);
+
+    g_signal_connect(cb_year, "changed", G_CALLBACK(cb_year_changed), ctx);
+    g_signal_connect(cb_month, "changed", G_CALLBACK(cb_month_changed), ctx);
+
+    ctx->cb_year = cb_year;
+    ctx->cb_month = cb_month;
+    return create_frame("", vbox, 4, 0);
+}
+
+GtkWidget *create_action_buttons(ExpContext *ctx) {
     GtkWidget *vbox;
     GtkWidget *btn_add;
     GtkWidget *btn_edit;
