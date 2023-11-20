@@ -13,6 +13,9 @@ LIBS=$(GTK_LIBS)
 
 all: t t2
 
+dep:
+	apt install libgtk-3-dev
+
 .SILENT:
 t: $(PROGSRC) $(LIBSRC)
 	gcc $(CFLAGS) -o t $(PROGSRC) $(LIBSRC) $(LIBS)
