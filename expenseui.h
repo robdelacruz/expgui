@@ -26,6 +26,7 @@ GtkWidget *create_sidebar_controls(ExpContext *ctx);
 GtkWidget *create_filter_section(ExpContext *ctx);
 void refresh_filter_ui(ExpContext *ctx);
 
+void add_expense_row(ExpContext *ctx);
 void edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, ExpContext *ctx);
 
 #endif

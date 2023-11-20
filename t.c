@@ -21,6 +21,7 @@ static void file_open(GtkWidget *w, gpointer data);
 static void file_new(GtkWidget *w, gpointer data);
 static void file_save(GtkWidget *w, gpointer data);
 static void file_saveas(GtkWidget *w, gpointer data);
+static void expense_add(GtkWidget *w, gpointer data);
 static void expense_edit(GtkWidget *w, gpointer data);
 static void expense_delete(GtkWidget *w, gpointer data);
 
@@ -178,6 +179,7 @@ static GtkWidget *create_menubar(ExpContext *ctx, GtkWidget *mainwin) {
     g_signal_connect(mi_file_save, "activate", G_CALLBACK(file_save), ctx);
     g_signal_connect(mi_file_saveas, "activate", G_CALLBACK(file_saveas), ctx);
 
+    g_signal_connect(mi_expense_add, "activate", G_CALLBACK(expense_add), ctx);
     g_signal_connect(mi_expense_edit, "activate", G_CALLBACK(expense_edit), ctx);
     g_signal_connect(mi_expense_delete, "activate", G_CALLBACK(expense_delete), ctx);
 
@@ -221,6 +223,10 @@ static void file_save(GtkWidget *w, gpointer data) {
 static void file_saveas(GtkWidget *w, gpointer data) {
 }
 
+static void expense_add(GtkWidget *w, gpointer data) {
+    ExpContext *ctx = data;
+    add_expense_row(ctx);
+}
 static void expense_edit(GtkWidget *w, gpointer data) {
     ExpContext *ctx = data;
     GtkTreeView *tv = GTK_TREE_VIEW(ctx->expenses_view);
@@ -233,7 +239,6 @@ static void expense_edit(GtkWidget *w, gpointer data) {
         return;
     edit_expense_row(tv, &it, ctx);
 }
-
 static void expense_delete(GtkWidget *w, gpointer data) {
 }
 

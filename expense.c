@@ -360,6 +360,8 @@ void add_expense(Expense *newxp, ExpContext *ctx) {
         return;
     }
 
+    newxp->rowid = ctx->all_xps_count;
+    ctx->all_xps[ctx->all_xps_count] = create_expense(ctx->arena);
     copy_xp(ctx->all_xps[ctx->all_xps_count], newxp);
     ctx->all_xps_count++;
 }

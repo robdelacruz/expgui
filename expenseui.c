@@ -170,38 +170,6 @@ static void expense_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewC
     edit_expense_row(tv, &it, ctx);
 }
 
-void edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, ExpContext *ctx) {
-    Expense xp;
-    ExpenseEditDialog *d;
-    gint z;
-//    char isodate[ISO_DATE_LEN+1];
-    arena_t scratch = *ctx->scratch;
-    uint rowid;
-    int updated = 0;
-
-    init_expense(&xp, &scratch);
-    get_expense_from_treeview(tv, it, &xp);
-    rowid = xp.rowid;
-
-    d = create_expense_edit_dialog(&scratch, &xp);
-    z = gtk_dialog_run(d->dlg);
-    if (z == GTK_RESPONSE_OK) {
-        GtkListStore *ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
-        get_edit_expense(d, &xp);
-        assert(xp.rowid == rowid);
-
-        update_expense(&xp, ctx);
-        updated = 1;
-
-//        format_date_iso(xp.dt, isodate, sizeof(isodate));
-//        gtk_list_store_set(ls, it, 0, isodate, 1, xp.desc.s, 2, xp.amt, 3, xp.cat.s, -1);
-    }
-    free_expense_edit_dialog(d);
-
-    if (updated)
-        apply_filter(ctx);
-}
-
 static void expense_row_changed(GtkTreeSelection *ts, gpointer data) {
     ExpContext *ctx = data;
     GtkTreeView *tv;
@@ -304,8 +272,8 @@ void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, 
 
     // Turn off selection while refreshing treeview so we don't get
     // bombarded by 'change' events.
-//    ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
-//    gtk_tree_selection_set_mode(ts, GTK_SELECTION_NONE);
+    ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
+    gtk_tree_selection_set_mode(ts, GTK_SELECTION_NONE);
 
     gtk_list_store_clear(ls);
 
@@ -326,12 +294,11 @@ void refresh_expenses_treeview(GtkTreeView *tv, Expense *xps[], size_t xps_len, 
         if (xp->rowid == cur_rowid) {
             tp = gtk_tree_model_get_path(GTK_TREE_MODEL(ls), &it);
             gtk_tree_view_set_cursor(tv, tp, NULL, FALSE);
-            printf("restored cursor: %d\n", xp->rowid);
             gtk_tree_path_free(tp);
         }
     }
 
-//    gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
+    gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
 
     if (reset_cursor) {
         tp = gtk_tree_path_new_from_string("0");
@@ -788,5 +755,57 @@ static void edit_clicked(GtkButton *w, gpointer data) {
 }
 
 static void del_clicked(GtkButton *w, gpointer data) {
+}
+
+void add_expense_row(ExpContext *ctx) {
+    Expense xp;
+    ExpenseEditDialog *d;
+    gint z;
+    arena_t scratch = *ctx->scratch;
+    int updated = 0;
+
+    init_expense(&xp, &scratch);
+    d = create_expense_edit_dialog(&scratch, &xp);
+    z = gtk_dialog_run(d->dlg);
+    if (z == GTK_RESPONSE_OK) {
+        get_edit_expense(d, &xp);
+        add_expense(&xp, ctx);
+        updated = 1;
+    }
+    free_expense_edit_dialog(d);
+
+    if (updated) {
+        apply_filter(ctx);
+        //$$todo update ctx->cb_year if year was changed
+    }
+}
+
+void edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, ExpContext *ctx) {
+    Expense xp;
+    ExpenseEditDialog *d;
+    gint z;
+    arena_t scratch = *ctx->scratch;
+    uint rowid;
+    int updated = 0;
+
+    init_expense(&xp, &scratch);
+    get_expense_from_treeview(tv, it, &xp);
+    rowid = xp.rowid;
+
+    d = create_expense_edit_dialog(&scratch, &xp);
+    z = gtk_dialog_run(d->dlg);
+    if (z == GTK_RESPONSE_OK) {
+        get_edit_expense(d, &xp);
+        assert(xp.rowid == rowid);
+
+        update_expense(&xp, ctx);
+        updated = 1;
+    }
+    free_expense_edit_dialog(d);
+
+    if (updated) {
+        apply_filter(ctx);
+        //$$todo update ctx->cb_year if year was changed
+    }
 }
 
