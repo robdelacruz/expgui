@@ -137,7 +137,6 @@ static void chomp(char *buf) {
             buf[i] = 0;
     }
 }
-
 static void read_xp_line(char *buf, Expense *xp) {
     // Sample expense line:
     // 2016-05-01; 00:00; Mochi Cream coffee; 100.00; coffee
@@ -149,14 +148,12 @@ static void read_xp_line(char *buf, Expense *xp) {
     p = read_field_double(p, &xp->amt);
     p = read_field_str(p, &xp->cat);
 }
-
 static char *skip_ws(char *startp) {
     char *p = startp;
     while (*p == ' ')
         p++;
     return p;
 }
-
 static char *read_field(char *startp, char **field) {
     char *p = startp;
     while (*p != '\0' && *p != ';')
@@ -171,21 +168,18 @@ static char *read_field(char *startp, char **field) {
     *field = startp;
     return p;
 }
-
 static char *read_field_date(char *startp, date_t *dt) {
     char *sfield;
     char *p = read_field(startp, &sfield);
     *dt = date_from_iso(sfield);
     return p;
 }
-
 static char *read_field_double(char *startp, double *f) {
     char *sfield;
     char *p = read_field(startp, &sfield);
     *f = atof(sfield);
     return p;
 }
-
 static char *read_field_str(char *startp, str_t *str) {
     char *sfield;
     char *p = read_field(startp, &sfield);
