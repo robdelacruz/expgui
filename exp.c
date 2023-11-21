@@ -56,6 +56,7 @@ uictx_t *uictx_new() {
     date_t today = current_date();
     ctx->view_year = today.year;
     ctx->view_month = today.month;
+    ctx->view_month = 0;
 
     ctx->mainwin = NULL;
     ctx->expenses_view = NULL;
@@ -82,6 +83,7 @@ void uictx_reset(uictx_t *ctx) {
     date_t today = current_date();
     ctx->view_year = today.year;
     ctx->view_month = today.month;
+    ctx->view_month = 0;
 }
 
 #define BUFLINE_SIZE 255
@@ -184,13 +186,25 @@ static char *read_field_str(char *startp, str_t *str) {
 void filter_expenses(uictx_t *ctx) {
     exp_t *xp;
     size_t count_match_xps = 0;
+    const gchar *filter;
 
     array_t *all_xps = &ctx->all_xps;
     array_t *view_xps = &ctx->view_xps;
 
+    filter = gtk_entry_get_text(GTK_ENTRY(ctx->txt_filter));
+    if (strlen(filter) == 0)
+        filter = NULL;
+
     for (int i=0; i < all_xps->len; i++) {
         xp = all_xps->items[i];
-        view_xps->items[count_match_xps];
+        if (filter != NULL && strcasestr(xp->desc->s, filter) == NULL)
+            continue;
+        if (ctx->view_year != 0 && ctx->view_year != xp->dt.year)
+            continue;
+        if (ctx->view_month != 0 && ctx->view_month != xp->dt.month)
+            continue;
+
+        view_xps->items[count_match_xps] = xp;
         count_match_xps++;
     }
     view_xps->len = count_match_xps;

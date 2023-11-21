@@ -231,7 +231,6 @@ void refresh_expenses_treeview(GtkTreeView *tv, array_t *xps, gboolean reset_cur
     if (tp) {
         gtk_tree_model_get_iter(GTK_TREE_MODEL(ls), &it, tp);
         gtk_tree_model_get(GTK_TREE_MODEL(ls), &it, 4, &cur_rowid, -1);
-        printf("cur_rowid: %d\n", cur_rowid);
     }
     gtk_tree_path_free(tp);
 
