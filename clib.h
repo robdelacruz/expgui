@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #define countof(v) (sizeof(v) / sizeof((v)[0]))
+#define memzero(p, v) (memset(p, 0, sizeof(v)))
 
 #define SIZE_MB      1024*1024
 #define SIZE_TINY    512

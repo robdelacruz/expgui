@@ -6,9 +6,9 @@
 #include <errno.h>
 #include <gtk/gtk.h>
 
-#include "bslib.h"
-#include "expense.h"
-#include "expenseui.h"
+#include "clib.h"
+#include "exp.h"
+#include "ui.h"
 
 void quit(const char *s);
 void print_error(const char *s);
@@ -26,13 +26,8 @@ static void expense_edit(GtkWidget *w, gpointer data);
 static void expense_delete(GtkWidget *w, gpointer data);
 
 int main(int argc, char *argv[]) {
-    arena_t app_arena, scratch;
-    ExpContext ctx;
+    uictx_t *ctx = uictx_new();
     int z;
-
-    app_arena = new_arena(10 * MB_BYTES);
-    scratch = new_arena(0);
-    init_context(&ctx, &app_arena, &scratch);
 
     gtk_init(&argc, &argv);
     setup_ui(&ctx);
@@ -78,7 +73,6 @@ static void setup_ui(ExpContext *ctx) {
     GtkWidget *vbox1;
 
     GtkWidget *main_vbox;
-    GtkWidget *filter_box;
 
     // mainwin
     mainwin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -93,7 +87,6 @@ static void setup_ui(ExpContext *ctx) {
     guint statusid =  gtk_statusbar_get_context_id(GTK_STATUSBAR(statusbar), "info");
     gtk_statusbar_push(GTK_STATUSBAR(statusbar), statusid, "Expense Buddy GUI");
 
-    filter_box = create_filter_section(ctx);
     expenses_frame = create_expenses_section(ctx);
     sidebar = create_sidebar_controls(ctx);
     //g_object_set(sidebar, "margin-top", 5, NULL);

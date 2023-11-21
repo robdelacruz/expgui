@@ -21,10 +21,6 @@ static void panic(char *s) {
     abort();
 }
 
-static inline void memzero(void *p, size_t len) {
-    memset(p, 0, len);
-}
-
 date_t default_date() {
     date_t dt = {.month = 1, .day = 1, .year = 1970};
     return dt;
@@ -128,14 +124,14 @@ str_t *str_new(size_t cap) {
 
     str = malloc(sizeof(str_t));
     str->s = malloc(cap);
-    memzero(str->s, cap);
+    memset(str->s, 0, cap);
     str->len = 0;
     str->cap = cap;
 
     return str;
 }
 void str_free(str_t *str) {
-    memzero(str->s, str->cap);
+    memset(str->s, 0, str->cap);
     free(str->s);
     free(str);
 }
