@@ -88,7 +88,7 @@ arena_t new_arena(uint64_t cap) {
     arena_t a; 
 
     if (cap == 0)
-        cap = ARENA_DEFAULT;
+        cap = SIZE_MEDIUM;
 
     a.base = malloc(cap);
     if (!a.base)
