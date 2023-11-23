@@ -43,64 +43,18 @@ void exp_dup(exp_t *destxp, exp_t *srcxp) {
     destxp->rowid = srcxp->rowid;
 }
 
-uictx_t *uictx_new() {
-    uictx_t *ctx = malloc(sizeof(uictx_t));
-
-    ctx->xpfile = str_new(0);
-
-    array_assign(&ctx->all_xps,
-                 (void **)ctx->_XPS1, 0, countof(ctx->_XPS1));
-    array_assign(&ctx->view_xps,
-                 (void **)ctx->_XPS2, 0, countof(ctx->_XPS2));
-
-    date_t today = current_date();
-    ctx->view_year = today.year;
-    ctx->view_month = today.month;
-    ctx->view_month = 0;
-
-    ctx->mainwin = NULL;
-    ctx->expenses_view = NULL;
-    ctx->txt_filter = NULL;
-
-    return ctx;
-}
-void uictx_free(uictx_t *ctx) {
-    str_free(ctx->xpfile);
-    free(ctx);
-}
-
-void uictx_reset(uictx_t *ctx) {
-    str_assign(ctx->xpfile, "");
-
-    for (int i=0; i < ctx->all_xps.len; i++) {
-        assert(ctx->all_xps.items[i] != NULL);
-        exp_free(ctx->all_xps.items[i]);
-    }
-
-    array_clear(&ctx->all_xps);
-    array_clear(&ctx->view_xps);
-
-    date_t today = current_date();
-    ctx->view_year = today.year;
-    ctx->view_month = today.month;
-    ctx->view_month = 0;
-}
-
 #define BUFLINE_SIZE 255
-void load_expense_file(uictx_t *ctx, FILE *f) {
+void load_expense_file(FILE *f, array_t *destxps) {
     exp_t *xp;
     size_t count_xps = 0;
     char *buf;
     size_t buf_size;
     int i, z;
 
-    uictx_reset(ctx);
-
     buf = malloc(BUFLINE_SIZE);
     buf_size = BUFLINE_SIZE;
 
-    array_t *xps = &ctx->all_xps;
-    for (i=0; i < xps->cap; i++) {
+    for (i=0; i < destxps->cap; i++) {
         errno = 0;
         z = getline(&buf, &buf_size, f);
         if (z == -1 && errno != 0) {
@@ -114,16 +68,14 @@ void load_expense_file(uictx_t *ctx, FILE *f) {
         xp = exp_new();
         xp->rowid = count_xps;
         read_xp_line(buf, xp);
-        xps->items[count_xps] = xp;
+        destxps->items[count_xps] = xp;
         count_xps++;
     }
-    xps->len = count_xps;
+    destxps->len = count_xps;
 
     free(buf);
-    if (i == xps->cap)
-        printf("Maximum number of expenses (%ld) reached.\n", xps->cap);
-
-    filter_expenses(ctx);
+    if (i == destxps->cap)
+        printf("Maximum number of expenses (%ld) reached.\n", destxps->cap);
 }
 // Remove trailing \n or \r chars.
 static void chomp(char *buf) {
@@ -183,37 +135,32 @@ static char *read_field_str(char *startp, str_t *str) {
     return p;
 }
 
-void filter_expenses(uictx_t *ctx) {
+void filter_expenses(array_t *srcxps, array_t *destxps, char *filter, uint year, uint month) {
     exp_t *xp;
     size_t count_match_xps = 0;
-    const gchar *filter;
 
-    array_t *all_xps = &ctx->all_xps;
-    array_t *view_xps = &ctx->view_xps;
-
-    filter = gtk_entry_get_text(GTK_ENTRY(ctx->txt_filter));
     if (strlen(filter) == 0)
         filter = NULL;
 
-    for (int i=0; i < all_xps->len; i++) {
-        xp = all_xps->items[i];
+    for (int i=0; i < srcxps->len; i++) {
+        xp = srcxps->items[i];
         if (filter != NULL && strcasestr(xp->desc->s, filter) == NULL)
             continue;
-        if (ctx->view_year != 0 && ctx->view_year != xp->dt.year)
+        if (year != 0 && year != xp->dt.year)
             continue;
-        if (ctx->view_month != 0 && ctx->view_month != xp->dt.month)
+        if (month != 0 && month != xp->dt.month)
             continue;
 
-        view_xps->items[count_match_xps] = xp;
+        destxps->items[count_match_xps] = xp;
         count_match_xps++;
     }
-    view_xps->len = count_match_xps;
+    destxps->len = count_match_xps;
 }
 
-void update_expense(exp_t *savexp, uictx_t *ctx) {
+void update_expense(array_t *xps, exp_t *savexp) {
     exp_t *xp;
-    for (int i=0; i < ctx->all_xps.len; i++) {
-        xp = ctx->all_xps.items[i];
+    for (int i=0; i < xps->len; i++) {
+        xp = xps->items[i];
         if (xp->rowid == savexp->rowid) {
             exp_dup(xp, savexp);
             return;
@@ -221,18 +168,18 @@ void update_expense(exp_t *savexp, uictx_t *ctx) {
     }
 }
 
-void add_expense(exp_t *newxp, uictx_t *ctx) {
+void add_expense(array_t *xps, exp_t *newxp) {
     exp_t *xp;
-    assert(ctx->all_xps.len <= ctx->all_xps.cap);
+    assert(xps->len <= xps->cap);
 
-    if (ctx->all_xps.len == ctx->all_xps.cap) {
-        printf("Maximum number of expenses (%ld) reached.\n", ctx->all_xps.cap);
+    if (xps->len == xps->cap) {
+        printf("Maximum number of expenses (%ld) reached.\n", xps->cap);
         return;
     }
 
     xp = exp_new();
     exp_dup(xp, newxp);
-    xp->rowid = ctx->all_xps.len;
-    ctx->all_xps.items[ctx->all_xps.len] = xp;
-    ctx->all_xps.len++;
+    xp->rowid = xps->len;
+    xps->items[xps->len] = xp;
+    xps->len++;
 }

@@ -10,14 +10,25 @@
 
 #include "clib.h"
 
-static void panic_err(char *s) {
+void quit(const char *s) {
+    if (s)
+        printf("%s\n", s);
+    exit(0);
+}
+void print_error(const char *s) {
     if (s)
         fprintf(stderr, "%s: %s\n", s, strerror(errno));
-    abort();
+    else
+        fprintf(stderr, "%s\n", strerror(errno));
 }
-static void panic(char *s) {
+void panic(char *s) {
     if (s)
         fprintf(stderr, "%s\n", s);
+    abort();
+}
+void panic_err(char *s) {
+    if (s)
+        fprintf(stderr, "%s: %s\n", s, strerror(errno));
     abort();
 }
 

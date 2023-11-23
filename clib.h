@@ -39,6 +39,11 @@ typedef struct {
     size_t cap;
 } array_t;
 
+void quit(const char *s);
+void print_error(const char *s);
+void panic(char *s);
+void panic_err(char *s);
+
 typedef void *(allocfn_t)(size_t size);
 arena_t new_arena(uint64_t cap);
 void free_arena(arena_t a);

@@ -5,22 +5,26 @@
 #include "exp.h"
 
 typedef struct {
-    GtkDialog *dlg;
-    GtkEntry *txt_date;
-    GtkEntry *txt_desc;
-    GtkEntry *txt_amt;
-    GtkEntry *txt_cat;
-} ExpenseEditDialog;
+    str_t *xpfile;
+    exp_t *_XPS1[MAX_EXPENSES];
+    exp_t *_XPS2[MAX_EXPENSES];
+    array_t all_xps;
+    array_t view_xps;
 
-void set_screen_css(char *cssfile);
-GtkWidget *create_scroll_window(GtkWidget *child);
-GtkWidget *create_frame(gchar *label, GtkWidget *child, int xpadding, int ypadding);
+    uint view_year;
+    uint view_month;
+    guint view_wait_id;
 
-GtkWidget *create_expenses_section(uictx_t *ctx);
-GtkWidget *create_sidebar_controls(uictx_t *ctx);
-void refresh_expenses_treeview(GtkTreeView *tv, array_t *xps, gboolean reset_cursor);
+    GtkWidget *mainwin;
+    GtkWidget *expenses_view;
+    GtkWidget *txt_filter;
+} uictx_t;
 
-void add_expense_row(uictx_t *ctx);
-void edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_t *ctx);
+uictx_t *uictx_new();
+void uictx_free(uictx_t *ctx);
+void uictx_reset(uictx_t *ctx);
+
+void setup_ui(uictx_t *ctx);
+int open_expense_file(uictx_t *ctx, char *xpfile);
 
 #endif
