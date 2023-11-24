@@ -171,21 +171,22 @@ void setup_ui(uictx_t *ctx) {
     expenses_frame = expensestv_new(ctx);
     sidebar = create_sidebar_controls(ctx);
     //g_object_set(sidebar, "margin-top", 5, NULL);
-    gtk_widget_set_size_request(sidebar, 100, -1);
+    //gtk_widget_set_size_request(sidebar, 100, -1);
 
-    hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_box_pack_start(GTK_BOX(hbox1), sidebar, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(hbox1), expenses_frame, TRUE, TRUE, 0);
+    //hbox1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    //gtk_box_pack_start(GTK_BOX(hbox1), sidebar, FALSE, FALSE, 0);
+    //gtk_box_pack_start(GTK_BOX(hbox1), expenses_frame, TRUE, TRUE, 0);
 
-    vbox1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    g_object_set(vbox1, "margin-start", 10, "margin-end", 10, "margin-top", 10, NULL);
-    gtk_box_pack_start(GTK_BOX(vbox1), hbox1, TRUE, TRUE, 0);
+    //vbox1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    //g_object_set(vbox1, "margin-start", 10, "margin-end", 10, "margin-top", 10, NULL);
+    //gtk_box_pack_start(GTK_BOX(vbox1), hbox1, TRUE, TRUE, 0);
 
     // Main window
     main_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_box_pack_start(GTK_BOX(main_vbox), menubar, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(main_vbox), vbox1, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(main_vbox), statusbar, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(main_vbox), expenses_frame, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(main_vbox), sidebar, FALSE, FALSE, 0);
+//    gtk_box_pack_start(GTK_BOX(main_vbox), statusbar, FALSE, FALSE, 0);
     gtk_container_add(GTK_CONTAINER(mainwin), main_vbox);
     gtk_widget_show_all(mainwin);
 
@@ -820,17 +821,59 @@ static gboolean expeditdlg_date_key_press_event(GtkEntry *ed, GdkEventKey *e, gp
     return FALSE;
 }
 
+static GtkWidget *create_year_menuitem(int year) {
+    GtkWidget *mi;
+    char syear[5];
+
+    if (year == 0)
+        strcpy(syear, "All");
+    else
+        sprintf(syear, "%d", year);
+
+    mi = gtk_menu_item_new_with_label(syear);
+    return mi;
+}
+
+static void yearbtn_button_press_event(GtkButton *w, GdkEventButton *e, gpointer data) {
+    GtkMenu *menu = GTK_MENU(data);
+    //gtk_menu_popup_at_pointer(menu, e);
+    gtk_menu_popup(menu, NULL, NULL, NULL, NULL, e->button, e->time);
+}
+
+GtkWidget *menu;
 GtkWidget *create_sidebar_controls(uictx_t *ctx) {
     GtkWidget *frame;
-    GtkWidget *vbox;
+    GtkWidget *hbox;
     GtkWidget *lbl;
+    GtkWidget *yearsel;
+    GtkWidget *mi;
+    int years[] = {2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 0};
+    int len_years = countof(years);
 
-    lbl = gtk_label_new("Time Period:");
+    lbl = gtk_label_new("Year:");
     g_object_set(lbl, "xalign", 0.0,  NULL);
 
-    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), lbl, FALSE, FALSE, 0);
+    menu = gtk_menu_new();
+    for (int i=0; i < countof(years); i++) {
+        mi = create_year_menuitem(years[i]);
+        gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
+    }
+    gtk_widget_show_all(menu);
 
-    return create_frame("", vbox, 4, 0);
+    char syear[5];
+    if (years[0] == 0)
+        sprintf(syear, "All");
+    else
+        sprintf(syear, "%d", years[0]);
+    yearsel = gtk_button_new_with_label(syear);
+    gtk_menu_attach_to_widget(GTK_MENU(menu), yearsel, NULL);
+
+    g_signal_connect(yearsel, "button-press-event", G_CALLBACK(yearbtn_button_press_event), menu);
+
+    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+    gtk_box_pack_start(GTK_BOX(hbox), lbl, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox), yearsel, FALSE, FALSE, 0);
+
+    return create_frame("", hbox, 4, 0);
 }
 
