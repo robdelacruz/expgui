@@ -4,7 +4,6 @@
 #include <gtk/gtk.h>
 #include "clib.h"
 
-#define MAX_EXPENSES 32768
 typedef int (*CompareFunc)(void *a, void *b);
 
 typedef struct {
@@ -25,5 +24,8 @@ void filter_expenses(array_t *srcxps, array_t *destxps, char *filter, uint year,
 
 void update_expense(array_t *xps, exp_t *savexp);
 void add_expense(array_t *xps, exp_t *newxp);
+
+void sort_expenses_by_date_asc(array_t *xps);
+void sort_expenses_by_date_desc(array_t *xps);
 
 #endif

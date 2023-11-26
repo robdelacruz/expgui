@@ -168,3 +168,44 @@ void array_clear(array_t *a) {
     memset(a->items, 0, a->cap);
     a->len = 0;
 }
+void intarray_assign(intarray_t *a, int *items, size_t len, size_t cap) {
+    a->items = items;
+    a->len = len;
+    a->cap = cap;
+}
+void intarray_clear(intarray_t *a) {
+    memset(a->items, 0, a->cap);
+    a->len = 0;
+}
+
+// sort_array() implementation functions
+static void swap_array(void *array[], int i, int j) {
+    void *tmp = array[i];
+    array[i] = array[j];
+    array[j] = tmp;
+}
+static int sort_array_partition(void *array[], int start, int end, CompareFunc compare_func) {
+    int imid = start;
+    void *pivot = array[end];
+
+    for (int i=start; i < end; i++) {
+        if (compare_func(array[i], pivot) < 0) {
+            swap_array(array, imid, i);
+            imid++;
+        }
+    }
+    swap_array(array, imid, end);
+    return imid;
+}
+static void sort_array_part(void *array[], int start, int end, CompareFunc compare_func) {
+    if (start >= end)
+        return;
+
+    int pivot = sort_array_partition(array, start, end, compare_func);
+    sort_array_part(array, start, pivot-1, compare_func);
+    sort_array_part(array, pivot+1, end, compare_func);
+}
+void sort_array(void *array[], size_t array_len, CompareFunc compare_func) {
+    sort_array_part(array, 0, array_len-1, compare_func);
+}
+

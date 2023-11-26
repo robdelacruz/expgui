@@ -9,6 +9,16 @@
 
 #include "ui.h"
 
+typedef struct {
+    GtkDialog *dlg;
+    GtkEntry *txt_date;
+    GtkEntry *txt_desc;
+    GtkEntry *txt_amt;
+    GtkEntry *txt_cat;
+} ExpenseEditDialog;
+
+static char *_month_names[] = {"All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+
 static void set_screen_css(char *cssfile);
 static GtkWidget *create_scroll_window(GtkWidget *child);
 static GtkWidget *create_frame(gchar *label, GtkWidget *child, int xpadding, int ypadding);
@@ -43,16 +53,9 @@ static void expensestv_add_expense_row(uictx_t *ctx);
 static void expensestv_edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_t *ctx);
 
 // Sidebar
-static GtkWidget *create_sidebar_controls(uictx_t *ctx);
-
-
-typedef struct {
-    GtkDialog *dlg;
-    GtkEntry *txt_date;
-    GtkEntry *txt_desc;
-    GtkEntry *txt_amt;
-    GtkEntry *txt_cat;
-} ExpenseEditDialog;
+static GtkWidget *sidebar_new(uictx_t *ctx);
+static void sidebar_refresh(uictx_t *ctx);
+static void init_year_selections(intarray_t *yearsels, array_t *xps);
 
 static ExpenseEditDialog *expeditdlg_new(exp_t *xp);
 static void expeditdlg_free(ExpenseEditDialog *d);
@@ -61,7 +64,6 @@ static void expeditdlg_amt_insert_text_event(GtkEntry* ed, gchar *new_txt, gint 
 static void expeditdlg_date_insert_text_event(GtkEntry* ed, gchar *newtxt, gint newtxt_len, gint *pos, gpointer data);
 static void expeditdlg_date_delete_text_event(GtkEntry* ed, gint startpos, gint endpos, gpointer data);
 static gboolean expeditdlg_date_key_press_event(GtkEntry *ed, GdkEventKey *e, gpointer data);
-
 
 static void set_screen_css(char *cssfile) {
     GdkScreen *screen = gdk_screen_get_default();
@@ -112,7 +114,12 @@ uictx_t *uictx_new() {
     date_t today = current_date();
     ctx->view_year = today.year;
     ctx->view_month = today.month;
-    ctx->view_month = 0;
+    ctx->view_wait_id = 0;
+
+    intarray_assign(&ctx->yearsels,
+                    (int *)ctx->_YEARSELS, 0, countof(ctx->_YEARSELS));
+    ctx->yearsels.items[0] = 0;
+    ctx->yearsels.len = 1;
 
     ctx->mainwin = NULL;
     ctx->expenses_view = NULL;
@@ -169,7 +176,7 @@ void setup_ui(uictx_t *ctx) {
     gtk_statusbar_push(GTK_STATUSBAR(statusbar), statusid, "Expense Buddy GUI");
 
     expenses_frame = expensestv_new(ctx);
-    sidebar = create_sidebar_controls(ctx);
+    sidebar = sidebar_new(ctx);
     //g_object_set(sidebar, "margin-top", 5, NULL);
     //gtk_widget_set_size_request(sidebar, 100, -1);
 
@@ -216,6 +223,9 @@ int open_expense_file(uictx_t *ctx, char *xpfile) {
     filter = (char *) gtk_entry_get_text(GTK_ENTRY(ctx->txt_filter));
     filter_expenses(&ctx->all_xps, &ctx->view_xps, filter, ctx->view_year, ctx->view_month);
     expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), &ctx->view_xps, TRUE);
+
+    init_year_selections(&ctx->yearsels, &ctx->all_xps);
+    sidebar_refresh(ctx);
 
     return 0;
 }
@@ -828,10 +838,8 @@ static void copy_year_str(int year, char *syear, size_t syear_len) {
         snprintf(syear, syear_len, "%d", year);
 }
 static char *get_month_name(uint month) {
-    static char *month_names[] = {"All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
-
-    assert(month < countof(month_names));
-    return month_names[month];
+    assert(month < countof(_month_names));
+    return _month_names[month];
 }
 
 static GtkWidget *create_year_menuitem(int year) {
@@ -843,33 +851,57 @@ static GtkWidget *create_month_menuitem(int month) {
     return gtk_menu_item_new_with_label(get_month_name(month));
 }
 
-GtkWidget *create_sidebar_controls(uictx_t *ctx) {
+static void init_year_selections(intarray_t *yearsels, array_t *xps) {
+// Assumes that xps is sorted descending order by date.
+    uint lowest_year = 10000;
+    size_t j = 0;
+
+    assert(yearsels->cap > 0);
+
+    printf("init_year_selections()\n");
+
+    for (int i=0; i < xps->len; i++) {
+        exp_t *xp = xps->items[i];
+        uint xp_year = xp->dt.year;
+        if (xp_year < lowest_year) {
+            yearsels->items[j] = (int)xp_year;
+            lowest_year = xp_year;
+            j++;
+
+            printf("yearsels->items[%ld] = %d\n", j, yearsels->items[j]);
+        }
+
+        if (j > yearsels->cap-1)
+            break;
+    }
+
+    yearsels->len = j;
+}
+
+GtkWidget *sidebar_new(uictx_t *ctx) {
     GtkWidget *frame;
     GtkWidget *hbox;
     GtkWidget *lbl;
     GtkWidget *menubtn;
     GtkWidget *menubtn_hbox;
     GtkWidget *icon;
-    GtkWidget *menu;
+    GtkWidget *yearmenu;
+    GtkWidget *monthmenu;
     GtkWidget *mi;
     GtkWidget *addbtn, *editbtn, *delbtn;
-    int years[] = {0, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015};
     char syear[5];
-    char smonth[20];
-    int selyear = 2022;
-    int selmonth = 12;
 
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
 
     // Year selector menu
-    menu = gtk_menu_new();
-    for (int i=0; i < countof(years); i++) {
-        mi = create_year_menuitem(years[i]);
-        gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
+    yearmenu = gtk_menu_new();
+    for (int i=0; i < ctx->yearsels.len; i++) {
+        mi = create_year_menuitem(ctx->yearsels.items[i]);
+        gtk_menu_shell_append(GTK_MENU_SHELL(yearmenu), mi);
     }
-    gtk_widget_show_all(menu);
+    gtk_widget_show_all(yearmenu);
 
-    copy_year_str(selyear, syear, sizeof(syear));
+    copy_year_str(ctx->view_year, syear, sizeof(syear));
     lbl = gtk_label_new(syear);
     icon = gtk_image_new_from_icon_name("pan-up-symbolic", GTK_ICON_SIZE_BUTTON);
     menubtn_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
@@ -879,20 +911,20 @@ GtkWidget *create_sidebar_controls(uictx_t *ctx) {
     menubtn = gtk_menu_button_new();
     gtk_container_add(GTK_CONTAINER(menubtn), menubtn_hbox);
     gtk_menu_button_set_direction(GTK_MENU_BUTTON(menubtn), GTK_ARROW_UP);
-    gtk_menu_button_set_popup(GTK_MENU_BUTTON(menubtn), menu);
-    g_object_set(menu, "halign", GTK_ALIGN_END, NULL);
+    gtk_menu_button_set_popup(GTK_MENU_BUTTON(menubtn), yearmenu);
+    g_object_set(yearmenu, "halign", GTK_ALIGN_END, NULL);
 
     gtk_box_pack_start(GTK_BOX(hbox), menubtn, FALSE, FALSE, 0);
 
     // Month selector menu
-    menu = gtk_menu_new();
+    monthmenu = gtk_menu_new();
     for (int i=0; i <= 12; i++) {
         mi = create_month_menuitem(i);
-        gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
+        gtk_menu_shell_append(GTK_MENU_SHELL(monthmenu), mi);
     }
-    gtk_widget_show_all(menu);
+    gtk_widget_show_all(monthmenu);
 
-    lbl = gtk_label_new(get_month_name(selmonth));
+    lbl = gtk_label_new(get_month_name(ctx->view_month));
     icon = gtk_image_new_from_icon_name("pan-up-symbolic", GTK_ICON_SIZE_BUTTON);
     menubtn_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
     gtk_box_pack_start(GTK_BOX(menubtn_hbox), lbl, FALSE, FALSE, 0);
@@ -901,8 +933,8 @@ GtkWidget *create_sidebar_controls(uictx_t *ctx) {
     menubtn = gtk_menu_button_new();
     gtk_container_add(GTK_CONTAINER(menubtn), menubtn_hbox);
     gtk_menu_button_set_direction(GTK_MENU_BUTTON(menubtn), GTK_ARROW_UP);
-    gtk_menu_button_set_popup(GTK_MENU_BUTTON(menubtn), menu);
-    g_object_set(menu, "halign", GTK_ALIGN_END, NULL);
+    gtk_menu_button_set_popup(GTK_MENU_BUTTON(menubtn), monthmenu);
+    g_object_set(monthmenu, "halign", GTK_ALIGN_END, NULL);
 
     gtk_box_pack_start(GTK_BOX(hbox), menubtn, FALSE, FALSE, 0);
 
@@ -916,6 +948,32 @@ GtkWidget *create_sidebar_controls(uictx_t *ctx) {
     gtk_box_pack_end(GTK_BOX(hbox), editbtn, FALSE, FALSE, 0);
     gtk_box_pack_end(GTK_BOX(hbox), addbtn, FALSE, FALSE, 0);
 
+    ctx->yearmenu = yearmenu;
+
     return create_frame("", hbox, 4, 0);
+}
+
+static void remove_child_func(gpointer data, gpointer user_data) {
+    GtkWidget *child = GTK_WIDGET(data);
+    GtkContainer *parent = GTK_CONTAINER(user_data);
+    gtk_container_remove(parent, child);
+}
+static void remove_children(GtkWidget *w) {
+    g_list_foreach(gtk_container_get_children(GTK_CONTAINER(w)), remove_child_func, w);
+}
+
+static void sidebar_refresh(uictx_t *ctx) {
+    GtkWidget *mi;
+    GtkWidget *yearmenu = ctx->yearmenu;
+
+    remove_children(yearmenu);
+
+    printf("sidebar_refresh()\n");
+    for (int i=0; i < ctx->yearsels.len; i++) {
+        printf("yearsels: %d\n", ctx->yearsels.items[i]);
+        mi = create_year_menuitem(ctx->yearsels.items[i]);
+        gtk_menu_shell_append(GTK_MENU_SHELL(yearmenu), mi);
+    }
+    gtk_widget_show_all(yearmenu);
 }
 

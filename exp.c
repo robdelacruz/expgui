@@ -76,6 +76,8 @@ void load_expense_file(FILE *f, array_t *destxps) {
     free(buf);
     if (i == destxps->cap)
         printf("Maximum number of expenses (%ld) reached.\n", destxps->cap);
+
+    sort_expenses_by_date_desc(destxps);
 }
 // Remove trailing \n or \r chars.
 static void chomp(char *buf) {
@@ -183,3 +185,31 @@ void add_expense(array_t *xps, exp_t *newxp) {
     xps->items[xps->len] = xp;
     xps->len++;
 }
+
+static int compare_expense_date_asc(void *xp1, void *xp2) {
+    date_t *dt1 = &((exp_t *)xp1)->dt;
+    date_t *dt2 = &((exp_t *)xp2)->dt;
+    if (dt1->year > dt2->year)
+        return 1;
+    if (dt1->year < dt2->year)
+        return -1;
+    if (dt1->month > dt2->month)
+        return 1;
+    if (dt1->month < dt2->month)
+        return -1;
+    if (dt1->day > dt2->day)
+        return 1;
+    if (dt1->day < dt2->day)
+        return -1;
+    return 0;
+}
+static int compare_expense_date_desc(void *xp1, void *xp2) {
+    return -compare_expense_date_asc(xp1, xp2);
+}
+void sort_expenses_by_date_asc(array_t *xps) {
+    sort_array(xps->items, xps->len, compare_expense_date_asc);
+}
+void sort_expenses_by_date_desc(array_t *xps) {
+    sort_array(xps->items, xps->len, compare_expense_date_desc);
+}
+

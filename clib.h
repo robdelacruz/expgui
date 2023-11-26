@@ -39,6 +39,12 @@ typedef struct {
     size_t cap;
 } array_t;
 
+typedef struct {
+    int *items;
+    size_t len;
+    size_t cap;
+} intarray_t;
+
 void quit(const char *s);
 void print_error(const char *s);
 void panic(char *s);
@@ -61,5 +67,10 @@ void format_date_iso(date_t dt, char buf[], size_t buf_len);
 
 void array_assign(array_t *a, void **items, size_t len, size_t cap);
 void array_clear(array_t *a);
+void intarray_assign(intarray_t *a, int *items, size_t len, size_t cap);
+void intarray_clear(intarray_t *a);
+
+typedef int (*CompareFunc)(void *a, void *b);
+void sort_array(void *array[], size_t array_len, CompareFunc compare_func);
 
 #endif
