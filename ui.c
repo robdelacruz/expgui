@@ -158,8 +158,8 @@ void setup_ui(uictx_t *ctx) {
     // mainwin
     mainwin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(mainwin), "gtktest");
-    gtk_window_set_default_size(GTK_WINDOW(mainwin), 640, 480);
-    gtk_widget_set_size_request(mainwin, 800, 600);
+    //gtk_widget_set_size_request(mainwin, 800, 600);
+    gtk_window_set_default_size(GTK_WINDOW(mainwin), 480, 480);
 
     menubar = mainmenu_new(ctx, mainwin);
     statusbar = gtk_statusbar_new();
@@ -821,38 +821,47 @@ static gboolean expeditdlg_date_key_press_event(GtkEntry *ed, GdkEventKey *e, gp
     return FALSE;
 }
 
-static GtkWidget *create_year_menuitem(int year) {
-    GtkWidget *mi;
-    char syear[5];
-
+static void copy_year_str(int year, char *syear, size_t syear_len) {
     if (year == 0)
-        strcpy(syear, "All");
+        strncpy(syear, "All", syear_len);
     else
-        sprintf(syear, "%d", year);
+        snprintf(syear, syear_len, "%d", year);
+}
+static char *get_month_name(uint month) {
+    static char *month_names[] = {"All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
-    mi = gtk_menu_item_new_with_label(syear);
-    return mi;
+    assert(month < countof(month_names));
+    return month_names[month];
 }
 
-static void yearbtn_button_press_event(GtkButton *w, GdkEventButton *e, gpointer data) {
-    GtkMenu *menu = GTK_MENU(data);
-    //gtk_menu_popup_at_pointer(menu, e);
-    gtk_menu_popup(menu, NULL, NULL, NULL, NULL, e->button, e->time);
+static GtkWidget *create_year_menuitem(int year) {
+    char syear[5];
+    copy_year_str(year, syear, sizeof(syear));
+    return gtk_menu_item_new_with_label(syear);
+}
+static GtkWidget *create_month_menuitem(int month) {
+    return gtk_menu_item_new_with_label(get_month_name(month));
 }
 
-GtkWidget *menu;
 GtkWidget *create_sidebar_controls(uictx_t *ctx) {
     GtkWidget *frame;
     GtkWidget *hbox;
     GtkWidget *lbl;
-    GtkWidget *yearsel;
+    GtkWidget *menubtn;
+    GtkWidget *menubtn_hbox;
+    GtkWidget *icon;
+    GtkWidget *menu;
     GtkWidget *mi;
-    int years[] = {2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 0};
-    int len_years = countof(years);
+    GtkWidget *addbtn, *editbtn, *delbtn;
+    int years[] = {0, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015};
+    char syear[5];
+    char smonth[20];
+    int selyear = 2022;
+    int selmonth = 12;
 
-    lbl = gtk_label_new("Year:");
-    g_object_set(lbl, "xalign", 0.0,  NULL);
+    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
 
+    // Year selector menu
     menu = gtk_menu_new();
     for (int i=0; i < countof(years); i++) {
         mi = create_year_menuitem(years[i]);
@@ -860,19 +869,52 @@ GtkWidget *create_sidebar_controls(uictx_t *ctx) {
     }
     gtk_widget_show_all(menu);
 
-    char syear[5];
-    if (years[0] == 0)
-        sprintf(syear, "All");
-    else
-        sprintf(syear, "%d", years[0]);
-    yearsel = gtk_button_new_with_label(syear);
-    gtk_menu_attach_to_widget(GTK_MENU(menu), yearsel, NULL);
+    copy_year_str(selyear, syear, sizeof(syear));
+    lbl = gtk_label_new(syear);
+    icon = gtk_image_new_from_icon_name("pan-up-symbolic", GTK_ICON_SIZE_BUTTON);
+    menubtn_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+    gtk_box_pack_start(GTK_BOX(menubtn_hbox), lbl, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(menubtn_hbox), icon, FALSE, FALSE, 0);
 
-    g_signal_connect(yearsel, "button-press-event", G_CALLBACK(yearbtn_button_press_event), menu);
+    menubtn = gtk_menu_button_new();
+    gtk_container_add(GTK_CONTAINER(menubtn), menubtn_hbox);
+    gtk_menu_button_set_direction(GTK_MENU_BUTTON(menubtn), GTK_ARROW_UP);
+    gtk_menu_button_set_popup(GTK_MENU_BUTTON(menubtn), menu);
+    g_object_set(menu, "halign", GTK_ALIGN_END, NULL);
 
-    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
-    gtk_box_pack_start(GTK_BOX(hbox), lbl, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(hbox), yearsel, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox), menubtn, FALSE, FALSE, 0);
+
+    // Month selector menu
+    menu = gtk_menu_new();
+    for (int i=0; i <= 12; i++) {
+        mi = create_month_menuitem(i);
+        gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
+    }
+    gtk_widget_show_all(menu);
+
+    lbl = gtk_label_new(get_month_name(selmonth));
+    icon = gtk_image_new_from_icon_name("pan-up-symbolic", GTK_ICON_SIZE_BUTTON);
+    menubtn_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+    gtk_box_pack_start(GTK_BOX(menubtn_hbox), lbl, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(menubtn_hbox), icon, FALSE, FALSE, 0);
+
+    menubtn = gtk_menu_button_new();
+    gtk_container_add(GTK_CONTAINER(menubtn), menubtn_hbox);
+    gtk_menu_button_set_direction(GTK_MENU_BUTTON(menubtn), GTK_ARROW_UP);
+    gtk_menu_button_set_popup(GTK_MENU_BUTTON(menubtn), menu);
+    g_object_set(menu, "halign", GTK_ALIGN_END, NULL);
+
+    gtk_box_pack_start(GTK_BOX(hbox), menubtn, FALSE, FALSE, 0);
+
+    addbtn = gtk_button_new_from_icon_name("list-add-symbolic", GTK_ICON_SIZE_BUTTON);
+    editbtn = gtk_button_new_from_icon_name("document-edit-symbolic", GTK_ICON_SIZE_BUTTON);
+    delbtn = gtk_button_new_from_icon_name("edit-delete-symbolic", GTK_ICON_SIZE_BUTTON);
+    //addbtn = gtk_button_new_with_mnemonic("_Add");
+    //editbtn = gtk_button_new_with_mnemonic("_Edit");
+    //delbtn = gtk_button_new_with_mnemonic("_Delete");
+    gtk_box_pack_end(GTK_BOX(hbox), delbtn, FALSE, FALSE, 0);
+    gtk_box_pack_end(GTK_BOX(hbox), editbtn, FALSE, FALSE, 0);
+    gtk_box_pack_end(GTK_BOX(hbox), addbtn, FALSE, FALSE, 0);
 
     return create_frame("", hbox, 4, 0);
 }
