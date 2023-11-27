@@ -22,6 +22,10 @@ typedef struct {
     GtkWidget *expenses_view;
     GtkWidget *txt_filter;
     GtkWidget *yearmenu;
+    GtkWidget *yearbtn;
+    GtkWidget *monthbtn;
+    GtkWidget *yearbtnlabel;
+    GtkWidget *monthbtnlabel;
 
     exp_t *_XPS1[MAX_EXPENSES];
     exp_t *_XPS2[MAX_EXPENSES];
