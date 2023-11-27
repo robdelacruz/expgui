@@ -900,6 +900,7 @@ static void sidebar_refresh(uictx_t *ctx) {
     copy_year_str(ctx->xpledger->view_year, syear, sizeof(syear));
     gtk_label_set_label(GTK_LABEL(ctx->yearbtnlabel), syear);
     gtk_label_set_label(GTK_LABEL(ctx->monthbtnlabel), get_month_name(ctx->xpledger->view_month));
+    gtk_entry_set_text(GTK_ENTRY(ctx->txt_filter), ctx->xpledger->view_filter->s);
 }
 
 static void sidebar_populate_year_menu(GtkWidget *menu, uictx_t *ctx) {

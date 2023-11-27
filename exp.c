@@ -124,6 +124,16 @@ void expledger_load_expense_file(expledger_t *l, FILE *f) {
     sort_expenses_by_date_desc(all_xps);
 
     init_year_selections(l->years, l->all_xps);
+
+    if (l->all_xps->len > 0) {
+        exp_t *xp = l->all_xps->items[0];
+        l->view_year = xp->dt.year;
+        l->view_month = xp->dt.month;
+    } else {
+        l->view_year = 0;
+        l->view_month = 0;
+    }
+
     expledger_apply_filter(l);
 }
 // Remove trailing \n or \r chars.
