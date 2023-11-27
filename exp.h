@@ -4,6 +4,9 @@
 #include <gtk/gtk.h>
 #include "clib.h"
 
+#define MAX_EXPENSES 32768
+#define MAX_YEARS 50
+
 typedef int (*CompareFunc)(void *a, void *b);
 
 typedef struct {
@@ -15,15 +18,29 @@ typedef struct {
     double amt;
 } exp_t;
 
+typedef struct {
+    array_t *all_xps;
+    array_t *view_xps;
+    intarray_t *years;
+
+    str_t *view_filter;
+    uint view_year;
+    uint view_month;
+} expledger_t;
+
 exp_t *exp_new();
 void exp_free(exp_t *xp);
 void exp_dup(exp_t *destxp, exp_t *srcxp);
 
-void load_expense_file(FILE *f, array_t *destxps);
-void filter_expenses(array_t *srcxps, array_t *destxps, char *filter, uint year, uint month);
+expledger_t *expledger_new();
+void expledger_free(expledger_t *l);
+void expledger_reset(expledger_t *l);
 
-void update_expense(array_t *xps, exp_t *savexp);
-void add_expense(array_t *xps, exp_t *newxp);
+void expledger_load_expense_file(expledger_t *l, FILE *f);
+void expledger_apply_filter(expledger_t *l);
+
+void expledger_update_expense(expledger_t *l, exp_t *savexp);
+void expledger_add_expense(expledger_t *l, exp_t *newxp);
 
 void sort_expenses_by_date_asc(array_t *xps);
 void sort_expenses_by_date_desc(array_t *xps);

@@ -65,8 +65,13 @@ date_t current_date();
 date_t date_from_iso(char *s);
 void format_date_iso(date_t dt, char buf[], size_t buf_len);
 
+array_t *array_new(size_t cap);
+void array_free(array_t *a);
 void array_assign(array_t *a, void **items, size_t len, size_t cap);
 void array_clear(array_t *a);
+
+intarray_t *intarray_new(size_t cap);
+void intarray_free(intarray_t *a);
 void intarray_assign(intarray_t *a, int *items, size_t len, size_t cap);
 void intarray_clear(intarray_t *a);
 

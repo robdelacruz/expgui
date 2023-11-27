@@ -159,6 +159,18 @@ void str_assign(str_t *str, char *s) {
     str->len = s_len;
 }
 
+array_t *array_new(size_t cap) {
+    array_t *a = malloc(sizeof(array_t));
+    a->items = malloc(sizeof(a->items[0]) * cap);
+    a->len = 0;
+    a->cap = cap;
+    return a;
+}
+void array_free(array_t *a) {
+    memset(a->items, 0, a->cap);
+    free(a->items);
+    free(a);
+}
 void array_assign(array_t *a, void **items, size_t len, size_t cap) {
     a->items = items;
     a->len = len;
@@ -167,6 +179,18 @@ void array_assign(array_t *a, void **items, size_t len, size_t cap) {
 void array_clear(array_t *a) {
     memset(a->items, 0, a->cap);
     a->len = 0;
+}
+intarray_t *intarray_new(size_t cap) {
+    intarray_t *a = malloc(sizeof(intarray_t));
+    a->items = malloc(sizeof(a->items[0]) * cap);
+    a->len = 0;
+    a->cap = cap;
+    return a;
+}
+void intarray_free(intarray_t *a) {
+    memset(a->items, 0, a->cap);
+    free(a->items);
+    free(a);
 }
 void intarray_assign(intarray_t *a, int *items, size_t len, size_t cap) {
     a->items = items;

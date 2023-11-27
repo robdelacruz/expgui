@@ -9,15 +9,9 @@
 
 typedef struct {
     str_t *xpfile;
-    array_t all_xps;
-    array_t view_xps;
+    expledger_t *xpledger;
 
-    uint view_year;
-    uint view_month;
     guint view_wait_id;
-
-    intarray_t yearsels;
-
     GtkWidget *mainwin;
     GtkWidget *expenses_view;
     GtkWidget *txt_filter;
@@ -26,17 +20,13 @@ typedef struct {
     GtkWidget *monthbtn;
     GtkWidget *yearbtnlabel;
     GtkWidget *monthbtnlabel;
-
-    exp_t *_XPS1[MAX_EXPENSES];
-    exp_t *_XPS2[MAX_EXPENSES];
-    uint _YEARSELS[MAX_YEARS];
 } uictx_t;
 
 uictx_t *uictx_new();
 void uictx_free(uictx_t *ctx);
 void uictx_reset(uictx_t *ctx);
 
-void setup_ui(uictx_t *ctx);
-int open_expense_file(uictx_t *ctx, char *xpfile);
+void uictx_setup_ui(uictx_t *ctx);
+int uictx_open_expense_file(uictx_t *ctx, char *xpfile);
 
 #endif
