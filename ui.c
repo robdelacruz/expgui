@@ -182,7 +182,7 @@ void setup_ui(uictx_t *ctx) {
 
     // mainwin
     mainwin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(mainwin), "gtktest");
+    gtk_window_set_title(GTK_WINDOW(mainwin), "Expense Buddy");
     //gtk_widget_set_size_request(mainwin, 800, 600);
     gtk_window_set_default_size(GTK_WINDOW(mainwin), 480, 480);
 
@@ -458,7 +458,7 @@ GtkWidget *expensestv_new(uictx_t *ctx) {
     frame = create_frame("", vbox, 4, 0);
 
     g_signal_connect(tv, "row-activated", G_CALLBACK(expensestv_row_activated), ctx);
-    g_signal_connect(ts, "changed", G_CALLBACK(expensestv_row_changed), ctx);
+//    g_signal_connect(ts, "changed", G_CALLBACK(expensestv_row_changed), ctx);
     g_signal_connect(tv, "key-press-event", G_CALLBACK(expensestv_keypress), ctx);
     g_signal_connect(txt_filter, "changed", G_CALLBACK(expensestv_filter_changed), ctx);
 
@@ -493,7 +493,6 @@ static void expensestv_row_changed(GtkTreeSelection *ts, gpointer data) {
     GtkTreeView *tv;
     GtkListStore *ls;
     GtkTreeIter it;
-    printf("expense_row_changed()\n");
 
     if (!gtk_tree_selection_get_selected(ts, (GtkTreeModel **)&ls, &it))
         return;
@@ -911,6 +910,7 @@ GtkWidget *sidebar_new(uictx_t *ctx) {
     char syear[5];
 
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+    g_object_set(hbox, "margin-top", 2, "margin-bottom", 2, NULL);
 
     // Year selector menu
     yearmenu = gtk_menu_new();
@@ -964,14 +964,19 @@ GtkWidget *sidebar_new(uictx_t *ctx) {
     ctx->yearbtnlabel = yearbtnlabel;
     ctx->monthbtnlabel = monthbtnlabel;
 
-    return create_frame("", hbox, 4, 0);
+    //return create_frame("", hbox, 4, 0);
+    return hbox;
 }
 
 static void sidebar_refresh(uictx_t *ctx) {
-    GtkWidget *yearmenu = ctx->yearmenu;
+    char syear[5];
 
-    remove_children(yearmenu);
-    sidebar_populate_year_menu(yearmenu, ctx);
+    remove_children(ctx->yearmenu);
+    sidebar_populate_year_menu(ctx->yearmenu, ctx);
+
+    copy_year_str(ctx->view_year, syear, sizeof(syear));
+    gtk_label_set_label(GTK_LABEL(ctx->yearbtnlabel), syear);
+    gtk_label_set_label(GTK_LABEL(ctx->monthbtnlabel), get_month_name(ctx->view_month));
 }
 
 static void sidebar_populate_year_menu(GtkWidget *menu, uictx_t *ctx) {
