@@ -12,9 +12,11 @@
 typedef struct {
     GtkDialog *dlg;
     GtkEntry *txt_date;
+    GtkCalendar *cal;
     GtkEntry *txt_desc;
     GtkEntry *txt_amt;
     GtkEntry *txt_cat;
+    int showcal;
 } ExpenseEditDialog;
 
 static char *_month_names[] = {"All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
@@ -63,9 +65,12 @@ static ExpenseEditDialog *expeditdlg_new(exp_t *xp);
 static void expeditdlg_free(ExpenseEditDialog *d);
 static void expeditdlg_get_expense(ExpenseEditDialog *d, exp_t *xp);
 static void expeditdlg_amt_insert_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data);
+static void expeditdlg_date_icon_press_event(GtkEntry *ed, GtkEntryIconPosition pos, GdkEvent *e, gpointer data);
 static void expeditdlg_date_insert_text_event(GtkEntry* ed, gchar *newtxt, gint newtxt_len, gint *pos, gpointer data);
 static void expeditdlg_date_delete_text_event(GtkEntry* ed, gint startpos, gint endpos, gpointer data);
 static gboolean expeditdlg_date_key_press_event(GtkEntry *ed, GdkEventKey *e, gpointer data);
+static void expeditdlg_cal_day_selected_event(GtkCalendar *cal, gpointer data);
+static void expeditdlg_cal_day_selected_dblclick_event(GtkCalendar *cal, gpointer data);
 
 static void set_screen_css(char *cssfile) {
     GdkScreen *screen = gdk_screen_get_default();
@@ -147,9 +152,6 @@ void uictx_setup_ui(uictx_t *ctx) {
     GtkWidget *expenses_view;
     GtkWidget *expenses_frame;
     GtkWidget *sidebar;
-    GtkWidget *hbox1;
-    GtkWidget *vbox1;
-
     GtkWidget *main_vbox;
 
     // mainwin
@@ -615,6 +617,8 @@ static ExpenseEditDialog *expeditdlg_new(exp_t *xp) {
     GtkWidget *dlgbox;
     GtkWidget *lbl_date, *lbl_desc, *lbl_amt, *lbl_cat;
     GtkWidget *txt_date, *txt_desc, *txt_amt, *txt_cat;
+    GtkWidget *cal;
+    GtkWidget *vboxdate;
     GtkWidget *tbl;
     char samt[12];
     char isodate[ISO_DATE_LEN+1];
@@ -633,19 +637,23 @@ static ExpenseEditDialog *expeditdlg_new(exp_t *xp) {
     lbl_amt = gtk_label_new("Amount");
     lbl_cat = gtk_label_new("Category");
     g_object_set(lbl_date, "xalign", 0.0, NULL);
+    //$$ align to top doesn't work when cal shown!
+    g_object_set(lbl_date, "yalign", 0.0, NULL);
     g_object_set(lbl_desc, "xalign", 0.0, NULL);
     g_object_set(lbl_amt, "xalign", 0.0, NULL);
     g_object_set(lbl_cat, "xalign", 0.0, NULL);
 
     txt_date = gtk_entry_new();
+    gtk_entry_set_icon_from_icon_name(GTK_ENTRY(txt_date), GTK_ENTRY_ICON_SECONDARY, "x-office-calendar-symbolic");
+    cal = gtk_calendar_new();
+    vboxdate = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_pack_start(GTK_BOX(vboxdate), txt_date, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vboxdate), cal, FALSE, FALSE, 0);
+
     txt_desc = gtk_entry_new();
     txt_amt = gtk_entry_new();
     txt_cat = gtk_entry_new();
     gtk_entry_set_width_chars(GTK_ENTRY(txt_desc), 25);
-    g_signal_connect(txt_amt, "insert-text", G_CALLBACK(expeditdlg_amt_insert_text_event), NULL);
-    g_signal_connect(txt_date, "insert-text", G_CALLBACK(expeditdlg_date_insert_text_event), NULL);
-    g_signal_connect(txt_date, "delete-text", G_CALLBACK(expeditdlg_date_delete_text_event), NULL);
-    g_signal_connect(txt_date, "key-press-event", G_CALLBACK(expeditdlg_date_key_press_event), NULL);
 
     format_date_iso(xp->dt, isodate, sizeof(isodate));
     gtk_entry_set_text(GTK_ENTRY(txt_date), isodate); 
@@ -653,6 +661,9 @@ static ExpenseEditDialog *expeditdlg_new(exp_t *xp) {
     snprintf(samt, sizeof(samt), "%.2f", xp->amt);
     gtk_entry_set_text(GTK_ENTRY(txt_amt), samt); 
     gtk_entry_set_text(GTK_ENTRY(txt_cat), xp->cat->s); 
+
+    gtk_calendar_select_month(GTK_CALENDAR(cal), xp->dt.month-1, xp->dt.year);
+    gtk_calendar_select_day(GTK_CALENDAR(cal), xp->dt.day);
 
     tbl = gtk_table_new(4, 2, FALSE);
     gtk_table_set_row_spacings(GTK_TABLE(tbl), 5);
@@ -662,7 +673,8 @@ static ExpenseEditDialog *expeditdlg_new(exp_t *xp) {
     gtk_table_attach(GTK_TABLE(tbl), lbl_desc, 0,1, 1,2, GTK_FILL, GTK_SHRINK, 0,0);
     gtk_table_attach(GTK_TABLE(tbl), lbl_amt,  0,1, 2,3, GTK_FILL, GTK_SHRINK, 0,0);
     gtk_table_attach(GTK_TABLE(tbl), lbl_cat,  0,1, 3,4, GTK_FILL, GTK_SHRINK, 0,0);
-    gtk_table_attach(GTK_TABLE(tbl), txt_date, 1,2, 0,1, GTK_FILL, GTK_SHRINK, 0,0);
+    //gtk_table_attach(GTK_TABLE(tbl), txt_date, 1,2, 0,1, GTK_FILL, GTK_SHRINK, 0,0);
+    gtk_table_attach(GTK_TABLE(tbl), vboxdate, 1,2, 0,1, GTK_FILL, GTK_SHRINK, 0,0);
     gtk_table_attach(GTK_TABLE(tbl), txt_desc, 1,2, 1,2, GTK_FILL, GTK_SHRINK, 0,0);
     gtk_table_attach(GTK_TABLE(tbl), txt_amt,  1,2, 2,3, GTK_FILL, GTK_SHRINK, 0,0);
     gtk_table_attach(GTK_TABLE(tbl), txt_cat,  1,2, 3,4, GTK_FILL, GTK_SHRINK, 0,0);
@@ -671,12 +683,25 @@ static ExpenseEditDialog *expeditdlg_new(exp_t *xp) {
     gtk_box_pack_start(GTK_BOX(dlgbox), tbl, TRUE, TRUE, 0);
     gtk_widget_show_all(dlg);
 
+    gtk_widget_hide(cal);
+
     d = malloc(sizeof(ExpenseEditDialog));
     d->dlg = GTK_DIALOG(dlg);
     d->txt_date = GTK_ENTRY(txt_date);
+    d->cal = GTK_CALENDAR(cal);
     d->txt_desc = GTK_ENTRY(txt_desc);
     d->txt_amt = GTK_ENTRY(txt_amt);
     d->txt_cat = GTK_ENTRY(txt_cat);
+    d->showcal = 0;
+
+    g_signal_connect(txt_amt, "insert-text", G_CALLBACK(expeditdlg_amt_insert_text_event), NULL);
+    g_signal_connect(txt_date, "icon-press", G_CALLBACK(expeditdlg_date_icon_press_event), d);
+    g_signal_connect(txt_date, "insert-text", G_CALLBACK(expeditdlg_date_insert_text_event), NULL);
+    g_signal_connect(txt_date, "delete-text", G_CALLBACK(expeditdlg_date_delete_text_event), NULL);
+    g_signal_connect(txt_date, "key-press-event", G_CALLBACK(expeditdlg_date_key_press_event), NULL);
+    g_signal_connect(cal, "day-selected", G_CALLBACK(expeditdlg_cal_day_selected_event), d);
+    g_signal_connect(cal, "day-selected-double-click", G_CALLBACK(expeditdlg_cal_day_selected_dblclick_event), d);
+
     return d;
 }
 static void expeditdlg_free(ExpenseEditDialog *d) {
@@ -719,7 +744,17 @@ static void expeditdlg_amt_insert_text_event(GtkEntry* ed, gchar *new_txt, gint 
         }
     }
 }
-static void expeditdlg_date_insert_text_event(GtkEntry* ed, gchar *newtxt, gint newtxt_len, gint *pos, gpointer data) {
+static void expeditdlg_date_icon_press_event(GtkEntry *ed, GtkEntryIconPosition pos, GdkEvent *e, gpointer data) {
+    ExpenseEditDialog *d = data;
+
+    // Toggle visibility of calendar control.
+    d->showcal = !d->showcal;
+    if (d->showcal)
+        gtk_widget_show(GTK_WIDGET(d->cal));
+    else
+        gtk_widget_hide(GTK_WIDGET(d->cal));
+}
+static void expeditdlg_date_insert_text_event(GtkEntry *ed, gchar *newtxt, gint newtxt_len, gint *pos, gpointer data) {
     int icur = *pos;
     gchar newch;
     const gchar *curtxt;
@@ -795,6 +830,24 @@ static gboolean expeditdlg_date_key_press_event(GtkEntry *ed, GdkEventKey *e, gp
         return TRUE;
 
     return FALSE;
+}
+static void expeditdlg_cal_day_selected_event(GtkCalendar *cal, gpointer data) {
+    ExpenseEditDialog *d = data;
+    date_t dt;
+    char isodate[ISO_DATE_LEN+1];
+
+    gtk_calendar_get_date(d->cal, &dt.year, &dt.month, &dt.day);
+    dt.month += 1;
+
+    format_date_iso(dt, isodate, sizeof(isodate));
+    gtk_entry_set_text(d->txt_date, isodate); 
+}
+static void expeditdlg_cal_day_selected_dblclick_event(GtkCalendar *cal, gpointer data) {
+    ExpenseEditDialog *d = data;
+
+    expeditdlg_cal_day_selected_event(cal, data);
+    d->showcal = 0;
+    gtk_widget_hide(GTK_WIDGET(d->cal));
 }
 
 static void copy_year_str(int year, char *syear, size_t syear_len) {
