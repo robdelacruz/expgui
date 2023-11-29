@@ -26,23 +26,22 @@ typedef struct {
     str_t *view_filter;
     uint view_year;
     uint view_month;
-} expledger_t;
+} db_t;
 
 exp_t *exp_new();
 void exp_free(exp_t *xp);
 void exp_dup(exp_t *destxp, exp_t *srcxp);
-
-expledger_t *expledger_new();
-void expledger_free(expledger_t *l);
-void expledger_reset(expledger_t *l);
-
-void expledger_load_expense_file(expledger_t *l, FILE *f);
-void expledger_apply_filter(expledger_t *l);
-
-void expledger_update_expense(expledger_t *l, exp_t *savexp);
-void expledger_add_expense(expledger_t *l, exp_t *newxp);
-
+int exp_is_valid(exp_t *xp);
 void sort_expenses_by_date_asc(array_t *xps);
 void sort_expenses_by_date_desc(array_t *xps);
+
+db_t *db_new();
+void db_free(db_t *l);
+void db_reset(db_t *l);
+
+void db_load_expense_file(db_t *l, FILE *f);
+void db_apply_filter(db_t *l);
+void db_update_expense(db_t *l, exp_t *savexp);
+void db_add_expense(db_t *l, exp_t *newxp);
 
 #endif

@@ -60,10 +60,12 @@ str_t *str_new(size_t cap);
 void str_free(str_t *str);
 void str_assign(str_t *str, char *s);
 
-date_t default_date();
-date_t current_date();
+date_t date_zero();
+date_t date_default();
+date_t date_current();
+int date_is_zero(date_t dt);
 date_t date_from_iso(char *s);
-void format_date_iso(date_t dt, char buf[], size_t buf_len);
+void date_to_iso(date_t dt, char buf[], size_t buf_len);
 
 array_t *array_new(size_t cap);
 void array_free(array_t *a);

@@ -32,24 +32,32 @@ void panic_err(char *s) {
     abort();
 }
 
-date_t default_date() {
+date_t date_zero() {
+    date_t dt = {.month = 0, .day = 0, .year = 0};
+    return dt;
+}
+date_t date_default() {
     date_t dt = {.month = 1, .day = 1, .year = 1970};
     return dt;
 }
-
-date_t current_date() {
+date_t date_current() {
     date_t dt;
     time_t t = time(NULL);
     struct tm *tm = localtime(&t);
     if (tm == NULL) {
         fprintf(stderr, "localtime(): %s\n", strerror(errno));
-        return default_date();
+        return date_default();
     }
 
     dt.month = tm->tm_mon+1;
     dt.day = tm->tm_mday;
     dt.year = tm->tm_year + 1900;
     return dt;
+}
+int date_is_zero(date_t dt) {
+    if (dt.year == 0 && dt.month == 0 && dt.day == 0)
+        return 1;
+    return 0;
 }
 
 /*** date_t functions ***/
@@ -87,10 +95,10 @@ date_t date_from_iso(char *s) {
     return dt;
 
 error:
-    return default_date();
+    return date_zero();
 }
 
-void format_date_iso(date_t dt, char buf[], size_t buf_len) {
+void date_to_iso(date_t dt, char buf[], size_t buf_len) {
     // 1900-01-01
     snprintf(buf, buf_len, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
 }

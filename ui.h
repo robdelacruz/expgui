@@ -9,7 +9,7 @@
 
 typedef struct {
     str_t *xpfile;
-    expledger_t *xpledger;
+    db_t *db;
 
     guint view_wait_id;
     GtkWidget *mainwin;
