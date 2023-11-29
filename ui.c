@@ -474,8 +474,8 @@ static void expensestv_get_expense(GtkTreeView *tv, GtkTreeIter *it, exp_t *xp) 
     xp->dt = date_from_iso(sdate);
     str_assign(xp->time, "");
     str_assign(xp->desc, desc);
-    str_assign(xp->cat, cat);
     xp->amt = amt;
+    xp->catid = 0; //$$
     xp->rowid = rowid;
 
     g_free(sdate);
@@ -519,7 +519,7 @@ void expensestv_refresh(GtkTreeView *tv, array_t *xps, gboolean reset_cursor) {
                            0, isodate,
                            1, xp->desc->s,
                            2, xp->amt,
-                           3, xp->cat->s,
+                           3, "", //$$
                            4, xp->rowid,
                            -1);
 
@@ -717,13 +717,12 @@ static void expeditdlg_get_expense(ExpenseEditDialog *d, exp_t *xp) {
     const gchar *sdate = gtk_entry_get_text(GTK_ENTRY(d->txt_date));
     const gchar *sdesc = gtk_entry_get_text(GTK_ENTRY(d->txt_desc));
     const gchar *samt = gtk_entry_get_text(GTK_ENTRY(d->txt_amt));
-    const gchar *scat = "todo";
 
     xp->dt = date_from_iso((char*) sdate);
     str_assign(xp->time, "");
     str_assign(xp->desc, (char*)sdesc);
     xp->amt = atof(samt);
-    str_assign(xp->cat, (char*)scat);
+    xp->catid = 0; //$$
 }
 
 static void expeditdlg_amt_insert_text_event(GtkEntry* ed, gchar *new_txt, gint len, gint *pos, gpointer data) {

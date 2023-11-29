@@ -14,8 +14,13 @@ static char *skip_ws(char *startp);
 static char *read_field(char *startp, char **field);
 static char *read_field_date(char *startp, date_t *dt);
 static char *read_field_double(char *startp, double *field);
+static char *read_field_uint(char *startp, uint *n);
 static char *read_field_str(char *startp, str_t *str);
 static void read_xp_line(char *buf, exp_t *xp);
+static void read_cat_line(char *buf, cat_t *cat);
+
+static void add_xp(char *buf, int lineno, array_t *all_xps, size_t *count_xps);
+static void add_cat(char *buf, int lineno, array_t *cats, size_t *count_cats);
 
 static void init_year_selections(intarray_t *years, array_t *xps);
 
@@ -25,14 +30,13 @@ exp_t *exp_new() {
     xp->dt = date_current();
     xp->time = str_new(5);
     xp->desc = str_new(0);
-    xp->cat = str_new(10);
+    xp->catid = 0;
     xp->amt = 0.0;
     return xp;
 }
 void exp_free(exp_t *xp) {
     str_free(xp->time);
     str_free(xp->desc);
-    str_free(xp->cat);
     free(xp);
 }
 
@@ -40,7 +44,7 @@ void exp_dup(exp_t *destxp, exp_t *srcxp) {
     destxp->dt = srcxp->dt;
     str_assign(destxp->time, srcxp->time->s);
     str_assign(destxp->desc, srcxp->desc->s);
-    str_assign(destxp->cat, srcxp->cat->s);
+    destxp->catid = srcxp->catid;
     destxp->amt = srcxp->amt;
     destxp->rowid = srcxp->rowid;
 }
@@ -78,8 +82,26 @@ void sort_expenses_by_date_desc(array_t *xps) {
     sort_array(xps->items, xps->len, exp_compare_date_desc);
 }
 
+cat_t *cat_new() {
+    cat_t *cat = malloc(sizeof(cat_t));
+    cat->id = 0;
+    cat->name = str_new(15);
+    return cat;
+}
+void cat_free(cat_t *cat) {
+    str_free(cat->name);
+    free(cat);
+}
+int cat_is_valid(cat_t *cat) {
+    if (cat->id == 0 || cat->name->len == 0)
+        return 0;
+    return 1;
+}
+
 db_t *db_new() {
     db_t *db = malloc(sizeof(db_t));
+
+    db->cats = array_new(MAX_CATEGORIES);
 
     db->all_xps = array_new(MAX_EXPENSES);
     db->view_xps = array_new(MAX_EXPENSES);
@@ -118,20 +140,25 @@ void db_reset(db_t *db) {
 }
 
 #define BUFLINE_SIZE 255
+enum loadstate_t {DB_LOAD_NONE, DB_LOAD_CAT, DB_LOAD_EXP};
+
 void db_load_expense_file(db_t *db, FILE *f) {
     array_t *all_xps = db->all_xps;
-    exp_t *xp;
+    array_t *cats = db->cats;
     size_t count_xps = 0;
+    size_t count_cats = 0;
+    int lineno = 1;
     char *buf;
     size_t buf_size;
-    int i, z;
+    int z;
+    enum loadstate_t state = DB_LOAD_NONE;
 
     db_reset(db);
 
     buf = malloc(BUFLINE_SIZE);
     buf_size = BUFLINE_SIZE;
 
-    for (i=0; i < all_xps->cap; i++) {
+    while (1) {
         errno = 0;
         z = getline(&buf, &buf_size, f);
         if (z == -1 && errno != 0) {
@@ -142,21 +169,38 @@ void db_load_expense_file(db_t *db, FILE *f) {
             break;
         chomp(buf);
 
-        xp = exp_new();
-        xp->rowid = count_xps;
-        read_xp_line(buf, xp);
-        if (!exp_is_valid(xp)) {
-            fprintf(stderr, "Skipping invalid expense line: %d\n", i);
+        if (strlen(buf) == 0)
+            continue;
+        if (buf[0] == '#') {
+            lineno++;
             continue;
         }
-        all_xps->items[count_xps] = xp;
-        count_xps++;
+        if (buf[0] == '%') {
+            if (strcmp(buf+1, "categories") == 0)
+                state = DB_LOAD_CAT;
+            else if (strcmp(buf+1, "expenses") == 0)
+                state = DB_LOAD_EXP;
+            else
+                fprintf(stderr, "Skipping invalid line: '%s'\n", buf);
+
+            lineno++;
+            continue;
+        }
+
+        if (state == DB_LOAD_EXP)
+            add_xp(buf, lineno, all_xps, &count_xps);
+        else if (state == DB_LOAD_CAT)
+            add_cat(buf, lineno, cats, &count_cats);
+        lineno++;
     }
     all_xps->len = count_xps;
+    cats->len = count_cats;
 
     free(buf);
-    if (i == all_xps->cap)
-        printf("Maximum number of expenses (%ld) reached.\n", all_xps->cap);
+    if (count_xps > all_xps->cap-1)
+        fprintf(stderr, "Max expenses (%ld) reached.\n", all_xps->cap);
+    if (count_cats > cats->cap-1)
+        fprintf(stderr, "Max categories (%ld) reached.\n", cats->cap);
 
     sort_expenses_by_date_desc(all_xps);
 
@@ -173,6 +217,44 @@ void db_load_expense_file(db_t *db, FILE *f) {
 
     db_apply_filter(db);
 }
+
+static void add_xp(char *buf, int lineno, array_t *all_xps, size_t *count_xps) {
+    exp_t *xp;
+    size_t count = *count_xps;
+
+    if (count > all_xps->cap-1)
+        return;
+
+    xp = exp_new();
+    xp->rowid = count;
+    read_xp_line(buf, xp);
+    if (!exp_is_valid(xp)) {
+        fprintf(stderr, "Skipping invalid expense line: %d\n", lineno);
+        exp_free(xp);
+        return;
+    }
+
+    all_xps->items[count] = xp;
+    (*count_xps)++;
+}
+static void add_cat(char *buf, int lineno, array_t *cats, size_t *count_cats) {
+    cat_t *cat;
+    size_t count = *count_cats;
+
+    if (count > cats->cap-1)
+        return;
+
+    cat = cat_new();
+    read_cat_line(buf, cat);
+    if (!cat_is_valid(cat)) {
+        fprintf(stderr, "Skipping invalid category line: %d\n", lineno);
+        cat_free(cat);
+        return;
+    }
+    cats->items[count] = cat;
+    (*count_cats)++;
+}
+
 // Remove trailing \n or \r chars.
 static void chomp(char *buf) {
     ssize_t buf_len = strlen(buf);
@@ -190,7 +272,12 @@ static void read_xp_line(char *buf, exp_t *xp) {
     p = read_field_str(p, xp->time);
     p = read_field_str(p, xp->desc);
     p = read_field_double(p, &xp->amt);
-    p = read_field_str(p, xp->cat);
+    p = read_field_uint(p, &xp->catid);
+}
+static void read_cat_line(char *buf, cat_t *cat) {
+    char *p = buf;
+    p = read_field_uint(p, &cat->id);
+    p = read_field_str(p, cat->name);
 }
 static char *skip_ws(char *startp) {
     char *p = startp;
@@ -222,6 +309,12 @@ static char *read_field_double(char *startp, double *f) {
     char *sfield;
     char *p = read_field(startp, &sfield);
     *f = atof(sfield);
+    return p;
+}
+static char *read_field_uint(char *startp, uint *n) {
+    char *sfield;
+    char *p = read_field(startp, &sfield);
+    *n = atoi(sfield);
     return p;
 }
 static char *read_field_str(char *startp, str_t *str) {
