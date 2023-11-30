@@ -216,12 +216,12 @@ static void swap_array(void *array[], int i, int j) {
     array[i] = array[j];
     array[j] = tmp;
 }
-static int sort_array_partition(void *array[], int start, int end, CompareFunc compare_func) {
+static int sort_array_partition(void *array[], int start, int end, sort_compare_func_t cmp) {
     int imid = start;
     void *pivot = array[end];
 
     for (int i=start; i < end; i++) {
-        if (compare_func(array[i], pivot) < 0) {
+        if (cmp(array[i], pivot) < 0) {
             swap_array(array, imid, i);
             imid++;
         }
@@ -229,15 +229,15 @@ static int sort_array_partition(void *array[], int start, int end, CompareFunc c
     swap_array(array, imid, end);
     return imid;
 }
-static void sort_array_part(void *array[], int start, int end, CompareFunc compare_func) {
+static void sort_array_part(void *array[], int start, int end, sort_compare_func_t cmp) {
     if (start >= end)
         return;
 
-    int pivot = sort_array_partition(array, start, end, compare_func);
-    sort_array_part(array, start, pivot-1, compare_func);
-    sort_array_part(array, pivot+1, end, compare_func);
+    int pivot = sort_array_partition(array, start, end, cmp);
+    sort_array_part(array, start, pivot-1, cmp);
+    sort_array_part(array, pivot+1, end, cmp);
 }
-void sort_array(void *array[], size_t array_len, CompareFunc compare_func) {
-    sort_array_part(array, 0, array_len-1, compare_func);
+void sort_array(void *array[], size_t array_len, sort_compare_func_t cmpfunc) {
+    sort_array_part(array, 0, array_len-1, cmpfunc);
 }
 

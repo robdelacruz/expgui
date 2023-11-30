@@ -77,7 +77,7 @@ void intarray_free(intarray_t *a);
 void intarray_assign(intarray_t *a, int *items, size_t len, size_t cap);
 void intarray_clear(intarray_t *a);
 
-typedef int (*CompareFunc)(void *a, void *b);
-void sort_array(void *array[], size_t array_len, CompareFunc compare_func);
+typedef int (*sort_compare_func_t)(void *a, void *b);
+void sort_array(void *array[], size_t array_len, sort_compare_func_t cmpfunc);
 
 #endif

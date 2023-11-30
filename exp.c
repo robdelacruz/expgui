@@ -22,6 +22,8 @@ static void read_cat_line(char *buf, cat_t *cat);
 static void add_xp(char *buf, int lineno, array_t *all_xps, size_t *count_xps);
 static void add_cat(char *buf, int lineno, array_t *cats, size_t *count_cats);
 
+static uint db_next_catid(db_t *db);
+
 static void init_year_selections(intarray_t *years, array_t *xps);
 
 exp_t *exp_new() {
@@ -31,22 +33,25 @@ exp_t *exp_new() {
     xp->time = str_new(5);
     xp->desc = str_new(0);
     xp->catid = 0;
+    xp->catname = str_new(0);
     xp->amt = 0.0;
     return xp;
 }
 void exp_free(exp_t *xp) {
     str_free(xp->time);
     str_free(xp->desc);
+    str_free(xp->catname);
     free(xp);
 }
 
-void exp_dup(exp_t *destxp, exp_t *srcxp) {
-    destxp->dt = srcxp->dt;
-    str_assign(destxp->time, srcxp->time->s);
-    str_assign(destxp->desc, srcxp->desc->s);
-    destxp->catid = srcxp->catid;
-    destxp->amt = srcxp->amt;
-    destxp->rowid = srcxp->rowid;
+void exp_dup(exp_t *dest, exp_t *src) {
+    dest->dt = src->dt;
+    str_assign(dest->time, src->time->s);
+    str_assign(dest->desc, src->desc->s);
+    str_assign(dest->catname, src->catname->s);
+    dest->catid = src->catid;
+    dest->amt = src->amt;
+    dest->rowid = src->rowid;
 }
 
 int exp_is_valid(exp_t *xp) {
@@ -91,6 +96,9 @@ cat_t *cat_new() {
 void cat_free(cat_t *cat) {
     str_free(cat->name);
     free(cat);
+}
+void cat_dup(cat_t *dest, cat_t *src) {
+    str_assign(dest->name, src->name->s);
 }
 int cat_is_valid(cat_t *cat) {
     if (cat->id == 0 || cat->name->len == 0)
@@ -377,6 +385,20 @@ void db_apply_filter(db_t *db) {
     view_xps->len = count_match_xps;
 }
 
+void db_assign_cat_names(db_t *db) {
+    exp_t *xp;
+    cat_t *cat;
+
+    for (int i=0; i < db->all_xps->len; i++) {
+        xp = db->all_xps->items[i];
+        cat = db_find_cat(db, xp->catid);
+        if (cat != NULL)
+            str_assign(xp->catname, cat->name->s);
+        else
+            str_assign(xp->catname, "(not found)");
+    }
+}
+
 void db_update_expense(db_t *db, exp_t *savexp) {
     array_t *all_xps = db->all_xps;
     exp_t *xp;
@@ -405,5 +427,54 @@ void db_add_expense(db_t *db, exp_t *newxp) {
     xp->rowid = all_xps->len;
     all_xps->items[all_xps->len] = xp;
     all_xps->len++;
+}
+
+void db_update_cat(db_t *db, cat_t *savecat) {
+    cat_t *cat;
+
+    for (int i=0; i < db->cats->len; i++) {
+        cat = db->cats->items[i];
+        if (cat->id == savecat->id) {
+            cat_dup(cat, savecat);
+            return;
+        }
+    }
+}
+
+void db_add_cat(db_t *db, cat_t *newcat) {
+    cat_t *cat;
+
+    assert(db->cats->len <= db->cats->cap);
+    if (db->cats->len == db->cats->cap) {
+        printf("Maximum number of categories (%ld) reached.\n", db->cats->cap);
+        return;
+    }
+
+    cat = cat_new();
+    cat_dup(cat, newcat);
+    cat->id = db_next_catid(db);
+    db->cats->items[db->cats->len] = cat;
+    db->cats->len++;
+}
+
+static uint db_next_catid(db_t *db) {
+    cat_t *cat;
+    uint highestid = 0;
+    for (int i=0; i < db->cats->len; i++) {
+        cat = db->cats->items[i];
+        if (cat->id > highestid)
+            highestid = cat->id;
+    }
+    return highestid+1;
+}
+
+cat_t *db_find_cat(db_t *db, uint id) {
+    cat_t *cat;
+    for (int i=0; i < db->cats->len; i++) {
+        cat = db->cats->items[i];
+        if (cat->id == id)
+            return cat;
+    }
+    return NULL;
 }
 
