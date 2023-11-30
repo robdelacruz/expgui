@@ -519,7 +519,7 @@ void expensestv_refresh(GtkTreeView *tv, array_t *xps, gboolean reset_cursor) {
                            0, isodate,
                            1, xp->desc->s,
                            2, xp->amt,
-                           3, "", //$$
+                           3, xp->catname->s, //$$
                            4, xp->rowid,
                            -1);
 

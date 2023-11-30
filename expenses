@@ -1,12 +1,12 @@
 %categories
-1; coffee
-2; commute
-3; food
-4; dine_out
-5; grocery
-6; utilities
-7; household
-8; medical
+1; Coffee
+2; Commute
+3; Food
+4; Dine Out
+5; Grocery
+6; Utilities
+7; Household
+8; Medical
 
 %expenses
 2016-05-01; 00:00; Mochi Cream coffee; 100.00; 1
