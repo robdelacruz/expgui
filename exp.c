@@ -21,9 +21,6 @@ static void read_cat_line(char *buf, cat_t *cat);
 
 static void add_xp(char *buf, int lineno, array_t *xps, size_t *count_xps);
 static void add_cat(char *buf, int lineno, array_t *cats, size_t *count_cats);
-
-static void db_assign_cat_names(db_t *db);
-static void db_assign_exp_cat_name(db_t *db, exp_t *xp);
 static uint db_next_catid(db_t *db);
 
 static void init_year_selections(intarray_t *years, array_t *xps);
@@ -35,14 +32,12 @@ exp_t *exp_new() {
     xp->time = str_new(5);
     xp->desc = str_new(0);
     xp->catid = 0;
-    xp->catname = str_new(0);
     xp->amt = 0.0;
     return xp;
 }
 void exp_free(exp_t *xp) {
     str_free(xp->time);
     str_free(xp->desc);
-    str_free(xp->catname);
     free(xp);
 }
 
@@ -50,7 +45,6 @@ void exp_dup(exp_t *dest, exp_t *src) {
     dest->dt = src->dt;
     str_assign(dest->time, src->time->s);
     str_assign(dest->desc, src->desc->s);
-    str_assign(dest->catname, src->catname->s);
     dest->catid = src->catid;
     dest->amt = src->amt;
     dest->rowid = src->rowid;
@@ -155,6 +149,7 @@ enum loadstate_t {DB_LOAD_NONE, DB_LOAD_CAT, DB_LOAD_EXP};
 void db_load_expense_file(db_t *db, FILE *f) {
     array_t *xps = db->xps;
     array_t *cats = db->cats;
+    cat_t *cat;
     size_t count_xps = 0;
     size_t count_cats = 0;
     int lineno = 1;
@@ -164,6 +159,12 @@ void db_load_expense_file(db_t *db, FILE *f) {
     enum loadstate_t state = DB_LOAD_NONE;
 
     db_reset(db);
+
+    cat = cat_new();
+    cat->id = 0;
+    str_assign(cat->name, "Uncategorized");
+    db->cats->items[0] = cat;
+    count_cats = 1;
 
     buf = malloc(BUFLINE_SIZE);
     buf_size = BUFLINE_SIZE;
@@ -212,9 +213,7 @@ void db_load_expense_file(db_t *db, FILE *f) {
     if (count_cats > cats->cap-1)
         fprintf(stderr, "Max categories (%ld) reached.\n", cats->cap);
 
-    db_assign_cat_names(db);
     sort_expenses_by_date_desc(xps);
-
     init_year_selections(db->years, db->xps);
 
     if (db->xps->len > 0) {
@@ -388,22 +387,6 @@ void db_apply_filter(db_t *db) {
     view_xps->len = count_match_xps;
 }
 
-static void db_assign_cat_names(db_t *db) {
-    exp_t *xp;
-    cat_t *cat;
-
-    for (int i=0; i < db->xps->len; i++) {
-        db_assign_exp_cat_name(db, db->xps->items[i]);
-    }
-}
-static void db_assign_exp_cat_name(db_t *db, exp_t *xp) {
-    cat_t *cat = db_find_cat(db, xp->catid);
-    if (cat != NULL)
-        str_assign(xp->catname, cat->name->s);
-    else
-        str_assign(xp->catname, "(not found)");
-}
-
 void db_update_expense(db_t *db, exp_t *savexp) {
     array_t *xps = db->xps;
     exp_t *xp;
@@ -412,7 +395,6 @@ void db_update_expense(db_t *db, exp_t *savexp) {
         xp = xps->items[i];
         if (xp->rowid == savexp->rowid) {
             exp_dup(xp, savexp);
-            db_assign_exp_cat_name(db, xp);
             return;
         }
     }
@@ -430,7 +412,6 @@ void db_add_expense(db_t *db, exp_t *newxp) {
 
     xp = exp_new();
     exp_dup(xp, newxp);
-    db_assign_exp_cat_name(db, xp);
     xp->rowid = xps->len+1;
     xps->items[xps->len] = xp;
     xps->len++;
@@ -480,5 +461,11 @@ cat_t *db_find_cat(db_t *db, uint id) {
             return cat;
     }
     return NULL;
+}
+char *db_find_cat_name(db_t *db, uint id) {
+    cat_t *cat = db_find_cat(db, id);
+    if (cat != NULL)
+        return cat->name->s;
+    return "";
 }
 

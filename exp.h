@@ -18,9 +18,8 @@ typedef struct {
     date_t dt;
     str_t *time;
     str_t *desc;
-    uint catid;
-    str_t *catname;
     double amt;
+    uint catid;
 } exp_t;
 
 typedef struct {
@@ -59,5 +58,6 @@ void db_add_expense(db_t *db, exp_t *newxp);
 void db_update_cat(db_t *db, cat_t *cat);
 void db_add_cat(db_t *db, cat_t *cat);
 cat_t *db_find_cat(db_t *db, uint id);
+char *db_find_cat_name(db_t *db, uint id);
 
 #endif
