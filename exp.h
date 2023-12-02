@@ -52,6 +52,7 @@ void db_reset(db_t *db);
 
 void db_load_expense_file(db_t *db, FILE *f);
 void db_apply_filter(db_t *db);
+void db_init_exp_years(db_t *db);
 
 void db_update_expense(db_t *db, exp_t *savexp);
 void db_add_expense(db_t *db, exp_t *newxp);

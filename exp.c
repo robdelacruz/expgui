@@ -23,8 +23,6 @@ static void add_xp(char *buf, int lineno, array_t *xps, size_t *count_xps);
 static void add_cat(char *buf, int lineno, array_t *cats, size_t *count_cats);
 static uint db_next_catid(db_t *db);
 
-static void init_year_selections(intarray_t *years, array_t *xps);
-
 exp_t *exp_new() {
     exp_t *xp = malloc(sizeof(exp_t));
     xp->rowid = 0;
@@ -214,7 +212,7 @@ void db_load_expense_file(db_t *db, FILE *f) {
         fprintf(stderr, "Max categories (%ld) reached.\n", cats->cap);
 
     sort_expenses_by_date_desc(xps);
-    init_year_selections(db->years, db->xps);
+    db_init_exp_years(db);
 
     if (db->xps->len > 0) {
         exp_t *xp = db->xps->items[0];
@@ -334,31 +332,6 @@ static char *read_field_str(char *startp, str_t *str) {
     return p;
 }
 
-static void init_year_selections(intarray_t *years, array_t *xps) {
-// Assumes that xps is sorted descending order by date.
-    uint lowest_year = 10000;
-    size_t j = 0;
-
-    assert(years->cap > 0);
-
-    years->items[j] = 0;
-    j++;
-
-    for (int i=0; i < xps->len; i++) {
-        if (j > years->cap-1)
-            break;
-
-        exp_t *xp = xps->items[i];
-        uint xp_year = xp->dt.year;
-        if (xp_year < lowest_year) {
-            years->items[j] = (int)xp_year;
-            lowest_year = xp_year;
-            j++;
-        }
-    }
-    years->len = j;
-}
-
 void db_apply_filter(db_t *db) {
     exp_t *xp;
     size_t count_match_xps = 0;
@@ -387,6 +360,32 @@ void db_apply_filter(db_t *db) {
     view_xps->len = count_match_xps;
 }
 
+void db_init_exp_years(db_t *db) {
+// Assumes that xps is sorted descending order by date.
+    uint lowest_year = 10000;
+    size_t j = 0;
+    intarray_t *years = db->years;
+
+    assert(years->cap > 0);
+
+    years->items[j] = 0;
+    j++;
+
+    for (int i=0; i < db->xps->len; i++) {
+        if (j > years->cap-1)
+            break;
+
+        exp_t *xp = db->xps->items[i];
+        uint xp_year = xp->dt.year;
+        if (xp_year < lowest_year) {
+            years->items[j] = (int)xp_year;
+            lowest_year = xp_year;
+            j++;
+        }
+    }
+    years->len = j;
+}
+
 void db_update_expense(db_t *db, exp_t *savexp) {
     array_t *xps = db->xps;
     exp_t *xp;
@@ -395,6 +394,8 @@ void db_update_expense(db_t *db, exp_t *savexp) {
         xp = xps->items[i];
         if (xp->rowid == savexp->rowid) {
             exp_dup(xp, savexp);
+            sort_expenses_by_date_desc(db->xps);
+            db_init_exp_years(db);
             return;
         }
     }
@@ -415,6 +416,9 @@ void db_add_expense(db_t *db, exp_t *newxp) {
     xp->rowid = xps->len+1;
     xps->items[xps->len] = xp;
     xps->len++;
+
+    sort_expenses_by_date_desc(db->xps);
+    db_init_exp_years(db);
 }
 
 void db_update_cat(db_t *db, cat_t *savecat) {

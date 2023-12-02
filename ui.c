@@ -591,7 +591,6 @@ void expensestv_add_expense_row(uictx_t *ctx) {
     exp_t *xp;
     ExpenseEditDialog *d;
     gint z;
-    int updated = 0;
 
     xp = exp_new();
     d = expeditdlg_new(ctx->db, xp);
@@ -599,15 +598,11 @@ void expensestv_add_expense_row(uictx_t *ctx) {
     if (z == GTK_RESPONSE_OK) {
         expeditdlg_get_expense(d, ctx->db, xp);
         db_add_expense(ctx->db, xp);
-        updated = 1;
-    }
 
-    if (updated) {
-        expeditdlg_get_expense(d, ctx->db, xp);
-        //apply_filter(ctx);
-        //$$todo update ctx->cb_year if year was changed
+        expensestv_apply_filter(ctx);
+        expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx->db, FALSE);
+        sidebar_populate_year_menu(ctx->yearmenu, ctx);
     }
-
     expeditdlg_free(d);
     exp_free(xp);
 }
@@ -617,7 +612,6 @@ static void expensestv_edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_
     ExpenseEditDialog *d;
     gint z;
     uint rowid;
-    int updated = 0;
 
     xp = exp_new();
     expensestv_get_expense(tv, it, xp);
@@ -628,17 +622,12 @@ static void expensestv_edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_
     if (z == GTK_RESPONSE_OK) {
         expeditdlg_get_expense(d, ctx->db, xp);
         assert(xp->rowid == rowid);
-
         db_update_expense(ctx->db, xp);
-        updated = 1;
-    }
 
-    if (updated) {
-        expeditdlg_get_expense(d, ctx->db, xp);
-        //apply_filter(ctx);
-        //$$todo update ctx->cb_year if year was changed
+        expensestv_apply_filter(ctx);
+        expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx->db, FALSE);
+        sidebar_populate_year_menu(ctx->yearmenu, ctx);
     }
-
     expeditdlg_free(d);
     exp_free(xp);
 }
@@ -1002,7 +991,6 @@ GtkWidget *sidebar_new(uictx_t *ctx) {
 static void sidebar_refresh(uictx_t *ctx) {
     char syear[5];
 
-    remove_children(ctx->yearmenu);
     sidebar_populate_year_menu(ctx->yearmenu, ctx);
 
     copy_year_str(ctx->db->view_year, syear, sizeof(syear));
@@ -1016,6 +1004,7 @@ static void sidebar_populate_year_menu(GtkWidget *menu, uictx_t *ctx) {
     ulong year;
     intarray_t *years = ctx->db->years;
 
+    remove_children(menu);
     for (int i=0; i < years->len; i++) {
         year = years->items[i];
         mi = create_year_menuitem(year);
