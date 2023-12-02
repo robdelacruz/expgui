@@ -4,10 +4,6 @@
 #include <gtk/gtk.h>
 #include "clib.h"
 
-#define MAX_CATEGORIES 50
-#define MAX_EXPENSES 32768
-#define MAX_YEARS 50
-
 typedef struct {
     uint id;
     str_t *name;
@@ -51,6 +47,7 @@ void db_free(db_t *db);
 void db_reset(db_t *db);
 
 void db_load_expense_file(db_t *db, FILE *f);
+void db_save_expense_file(db_t *db, FILE *f);
 void db_apply_filter(db_t *db);
 void db_init_exp_years(db_t *db);
 

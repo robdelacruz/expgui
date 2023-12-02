@@ -9,6 +9,13 @@
 #include "clib.h"
 #include "exp.h"
 
+#define MAX_CATEGORIES 50
+#define MAX_EXPENSES 32768
+#define MAX_YEARS 50
+#define CAT_UNCATEGORIZED "Uncategorized"
+#define EXPFILE_CATEGORIES "categories"
+#define EXPFILE_EXPENSES "expenses"
+
 static void chomp(char *buf);
 static char *skip_ws(char *startp);
 static char *read_field(char *startp, char **field);
@@ -160,7 +167,7 @@ void db_load_expense_file(db_t *db, FILE *f) {
 
     cat = cat_new();
     cat->id = 0;
-    str_assign(cat->name, "Uncategorized");
+    str_assign(cat->name, CAT_UNCATEGORIZED);
     db->cats->items[0] = cat;
     count_cats = 1;
 
@@ -184,10 +191,11 @@ void db_load_expense_file(db_t *db, FILE *f) {
             lineno++;
             continue;
         }
+        // Line starts with %categories or %expenses
         if (buf[0] == '%') {
-            if (strcmp(buf+1, "categories") == 0)
+            if (strcmp(buf+1, EXPFILE_CATEGORIES) == 0)
                 state = DB_LOAD_CAT;
-            else if (strcmp(buf+1, "expenses") == 0)
+            else if (strcmp(buf+1, EXPFILE_EXPENSES) == 0)
                 state = DB_LOAD_EXP;
             else
                 fprintf(stderr, "Skipping invalid line: '%s'\n", buf);
@@ -224,6 +232,28 @@ void db_load_expense_file(db_t *db, FILE *f) {
     }
 
     db_apply_filter(db);
+}
+
+void db_save_expense_file(db_t *db, FILE *f) {
+    cat_t *cat;
+    exp_t *xp;
+    char isodate[ISO_DATE_LEN+1];
+
+    // %categories
+    fprintf(f, "%%%s\n", EXPFILE_CATEGORIES);
+    for (int i=1; i < db->cats->len; i++) {
+        cat = db->cats->items[i];
+        fprintf(f, "%d; %s\n", cat->id, cat->name->s);
+    }
+    fprintf(f, "\n");
+
+    // %expenses
+    fprintf(f, "%%%s\n", EXPFILE_EXPENSES);
+    for (int i=1; i < db->xps->len; i++) {
+        xp = db->xps->items[i];
+        date_to_iso(xp->dt, isodate, sizeof(isodate));
+        fprintf(f, "%s; %s; %s; %.2f; %d\n", isodate, xp->time->s, xp->desc->s, xp->amt, xp->catid);
+    }
 }
 
 static void add_xp(char *buf, int lineno, array_t *xps, size_t *count_xps) {

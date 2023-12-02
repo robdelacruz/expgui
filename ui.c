@@ -295,6 +295,22 @@ exit:
 static void mainmenu_file_new(GtkWidget *w, gpointer data) {
 }
 static void mainmenu_file_save(GtkWidget *w, gpointer data) {
+    FILE *f;
+    uictx_t *ctx = data;
+
+    if (ctx->xpfile->len == 0) {
+        fprintf(stderr, "No expense file\n");
+        return;
+    }
+    f = fopen(ctx->xpfile->s, "w");
+    if (f == NULL) {
+        print_error("Error opening expense file");
+        return;
+    }
+
+    db_save_expense_file(ctx->db, f);
+    fclose(f);
+    fprintf(stderr, "Expense file '%s' saved.\n", ctx->xpfile->s);
 }
 static void mainmenu_file_saveas(GtkWidget *w, gpointer data) {
 }
@@ -760,7 +776,7 @@ static void expeditdlg_get_expense(ExpenseEditDialog *d, db_t *db, exp_t *xp) {
     int cbrow;
 
     xp->dt = date_from_iso((char*) sdate);
-    str_assign(xp->time, "");
+    str_assign(xp->time, "00:00");
     str_assign(xp->desc, (char*)sdesc);
     xp->amt = atof(samt);
     xp->catid = cat_id_from_row(db, gtk_combo_box_get_active(d->cbcat));
