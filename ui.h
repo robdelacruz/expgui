@@ -11,7 +11,11 @@ typedef struct {
     str_t *xpfile;
     db_t *db;
 
+    str_t *view_filter;
+    uint view_year;
+    uint view_month;
     guint view_wait_id;
+
     GtkWidget *mainwin;
     GtkWidget *expenses_view;
     GtkWidget *txt_filter;

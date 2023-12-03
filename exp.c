@@ -109,15 +109,9 @@ int cat_is_valid(cat_t *cat) {
 
 db_t *db_new() {
     db_t *db = malloc(sizeof(db_t));
-
     db->cats = array_new(MAX_CATEGORIES);
-
     db->xps = array_new(MAX_EXPENSES);
-    db->view_xps = array_new(MAX_EXPENSES);
     db->years = intarray_new(MAX_YEARS);
-    db->view_filter = str_new(0);
-    db->view_year = 0;
-    db->view_month = 0;
 
     // Initialize years selection to single "All" (0) item.
     db->years->items[0] = 0;
@@ -127,9 +121,7 @@ db_t *db_new() {
 }
 void db_free(db_t *db) {
     array_free(db->xps);
-    array_free(db->view_xps);
     intarray_free(db->years);
-    str_free(db->view_filter);
     free(db);
 }
 void db_reset(db_t *db) {
@@ -140,12 +132,7 @@ void db_reset(db_t *db) {
     }
 
     array_clear(db->xps);
-    array_clear(db->view_xps);
-
-    date_t today = date_current();
-    db->view_year = today.year;
-    db->view_month = today.month;
-    str_assign(db->view_filter, "");
+    intarray_clear(db->years);
 }
 
 #define BUFLINE_SIZE 255
@@ -221,17 +208,6 @@ void db_load_expense_file(db_t *db, FILE *f) {
 
     sort_expenses_by_date_desc(xps);
     db_init_exp_years(db);
-
-    if (db->xps->len > 0) {
-        exp_t *xp = db->xps->items[0];
-        db->view_year = xp->dt.year;
-        db->view_month = xp->dt.month;
-    } else {
-        db->view_year = 0;
-        db->view_month = 0;
-    }
-
-    db_apply_filter(db);
 }
 
 void db_save_expense_file(db_t *db, FILE *f) {
@@ -360,34 +336,6 @@ static char *read_field_str(char *startp, str_t *str) {
     char *p = read_field(startp, &sfield);
     str_assign(str, sfield);
     return p;
-}
-
-void db_apply_filter(db_t *db) {
-    exp_t *xp;
-    size_t count_match_xps = 0;
-
-    array_t *xps = db->xps;
-    array_t *view_xps = db->view_xps;
-    char *filter = db->view_filter->s;
-    uint year = db->view_year;
-    uint month = db->view_month;
-
-    if (db->view_filter->len == 0)
-        filter = NULL;
-
-    for (int i=0; i < xps->len; i++) {
-        xp = xps->items[i];
-        if (filter != NULL && strcasestr(xp->desc->s, filter) == NULL)
-            continue;
-        if (year != 0 && year != xp->dt.year)
-            continue;
-        if (month != 0 && month != xp->dt.month)
-            continue;
-
-        view_xps->items[count_match_xps] = xp;
-        count_match_xps++;
-    }
-    view_xps->len = count_match_xps;
 }
 
 void db_init_exp_years(db_t *db) {

@@ -45,8 +45,9 @@ static void expensestv_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeVi
 static void expensestv_row_changed(GtkTreeSelection *ts, gpointer data);
 static gboolean expensestv_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer data);
 
-static void expensestv_get_expense(GtkTreeView *tv, GtkTreeIter *it, exp_t *xp);
-static void expensestv_refresh(GtkTreeView *tv, db_t *db, gboolean reset_cursor);
+static void expensestv_get_expense(GtkListStore *ls, GtkTreeIter *it, exp_t *xp);
+static void expensestv_set_expense(GtkListStore *ls, GtkTreeIter *it, db_t *db, exp_t *xp);
+static void expensestv_refresh(GtkTreeView *tv, uictx_t *ctx, gboolean reset_cursor);
 static void expensestv_filter_changed(GtkWidget *w, gpointer data);
 static gboolean expensestv_apply_filter(gpointer data);
 
@@ -126,6 +127,11 @@ uictx_t *uictx_new() {
     ctx->xpfile = str_new(0);
     ctx->db = db_new();
 
+    ctx->view_filter = str_new(0);
+    ctx->view_year = 0;
+    ctx->view_month = 0;
+    ctx->view_wait_id = 0;
+
     ctx->mainwin = NULL;
     ctx->expenses_view = NULL;
     ctx->txt_filter = NULL;
@@ -139,11 +145,17 @@ uictx_t *uictx_new() {
 }
 void uictx_free(uictx_t *ctx) {
     str_free(ctx->xpfile);
+    str_free(ctx->view_filter);
     db_free(ctx->db);
     free(ctx);
 }
 void uictx_reset(uictx_t *ctx) {
     str_assign(ctx->xpfile, "");
+    str_assign(ctx->view_filter, "");
+    date_t today = date_current();
+    ctx->view_year = today.year;
+    ctx->view_month = today.month;
+    ctx->view_wait_id = 0;
     db_reset(ctx->db);
 }
 
@@ -185,17 +197,30 @@ void uictx_setup_ui(uictx_t *ctx) {
 int uictx_open_expense_file(uictx_t *ctx, char *xpfile) {
     FILE *f;
     char *filter;
+    db_t *db = ctx->db;
 
     f = fopen(xpfile, "r");
     if (f == NULL)
         return 1;
 
     uictx_reset(ctx);
-    db_load_expense_file(ctx->db, f);
+    db_load_expense_file(db, f);
     str_assign(ctx->xpfile, xpfile);
     fclose(f);
 
-    expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx->db, TRUE);
+    str_assign(ctx->view_filter, "");
+
+    // Initialize view year/month to most recent year/month.
+    if (db->xps->len > 0) {
+        exp_t *xp = db->xps->items[0];
+        ctx->view_year = xp->dt.year;
+        ctx->view_month = xp->dt.month;
+    } else {
+        ctx->view_year = 0;
+        ctx->view_month = 0;
+    }
+
+    expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, TRUE);
     sidebar_refresh(ctx);
 
     return 0;
@@ -498,41 +523,55 @@ static gboolean expensestv_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer da
     return FALSE;
 }
 
-static void expensestv_get_expense(GtkTreeView *tv, GtkTreeIter *it, exp_t *xp) {
-    GtkListStore *ls;
-    gchar *sdate;
+static void expensestv_get_expense(GtkListStore *ls, GtkTreeIter *it, exp_t *xp) {
+    char *isodate;
+    gchar *stime;
     gchar *desc;
-    gdouble amt;
-    uint catid;
-    uint rowid;
 
-    ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
     gtk_tree_model_get(GTK_TREE_MODEL(ls), it,
-                       EXP_FIELD_ROWID, &rowid,
-                       EXP_FIELD_DATE, &sdate,
+                       EXP_FIELD_ROWID, &xp->rowid,
+                       EXP_FIELD_DATE, &isodate,
+                       EXP_FIELD_TIME, &stime,
                        EXP_FIELD_DESC, &desc,
-                       EXP_FIELD_AMT, &amt,
-                       EXP_FIELD_CATID, &catid,
+                       EXP_FIELD_AMT, &xp->amt,
+                       EXP_FIELD_CATID, &xp->catid,
                        -1);
-    xp->rowid = rowid;
-    xp->dt = date_from_iso(sdate);
-    str_assign(xp->time, "");
-    str_assign(xp->desc, desc);
-    xp->amt = amt;
-    xp->catid = catid;
 
-    g_free(sdate);
+    xp->dt = date_from_iso(isodate);
+    str_assign(xp->time, stime);
+    str_assign(xp->desc, desc);
+
+    g_free(isodate);
+    g_free(stime);
     g_free(desc);
 }
+static void expensestv_set_expense(GtkListStore *ls, GtkTreeIter *it, db_t *db, exp_t *xp) {
+    char isodate[ISO_DATE_LEN+1];
+    date_to_iso(xp->dt, isodate, sizeof(isodate));
 
-static void expensestv_refresh(GtkTreeView *tv, db_t *db, gboolean reset_cursor) {
+    gtk_list_store_set(ls, it, 
+                       EXP_FIELD_ROWID, xp->rowid,
+                       EXP_FIELD_DATE, isodate,
+                       EXP_FIELD_TIME, xp->time->s,
+                       EXP_FIELD_DESC, xp->desc->s,
+                       EXP_FIELD_AMT, xp->amt,
+                       EXP_FIELD_CATID, xp->catid,
+                       EXP_FIELD_CATNAME, db_find_cat_name(db, xp->catid),
+                       -1);
+}
+
+static void expensestv_refresh(GtkTreeView *tv, uictx_t *ctx, gboolean reset_cursor) {
     GtkListStore *ls;
     GtkTreeIter it;
     GtkTreePath *tp;
     GtkTreeSelection *ts;
-    char isodate[ISO_DATE_LEN+1];
     exp_t *xp;
     uint cur_rowid = 0;
+
+    db_t *db = ctx->db;
+    str_t *filter = ctx->view_filter;
+    uint year = ctx->view_year;
+    uint month = ctx->view_month;
 
     ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(tv)));
     assert(ls != NULL);
@@ -541,7 +580,7 @@ static void expensestv_refresh(GtkTreeView *tv, db_t *db, gboolean reset_cursor)
     gtk_tree_view_get_cursor(tv, &tp, NULL);
     if (tp) {
         gtk_tree_model_get_iter(GTK_TREE_MODEL(ls), &it, tp);
-        gtk_tree_model_get(GTK_TREE_MODEL(ls), &it, 4, &cur_rowid, -1);
+        gtk_tree_model_get(GTK_TREE_MODEL(ls), &it, EXP_FIELD_ROWID, &cur_rowid, -1);
     }
     gtk_tree_path_free(tp);
 
@@ -552,20 +591,17 @@ static void expensestv_refresh(GtkTreeView *tv, db_t *db, gboolean reset_cursor)
 
     gtk_list_store_clear(ls);
 
-    for (int i=0; i < db->view_xps->len; i++) {
-        xp = db->view_xps->items[i];
-        date_to_iso(xp->dt, isodate, sizeof(isodate));
+    for (int i=0; i < db->xps->len; i++) {
+        xp = db->xps->items[i];
+        if (filter->len != 0 && strcasestr(xp->desc->s, filter->s) == NULL)
+            continue;
+        if (year != 0 && year != xp->dt.year)
+            continue;
+        if (month != 0 && month != xp->dt.month)
+            continue;
 
         gtk_list_store_append(ls, &it);
-        gtk_list_store_set(ls, &it, 
-                           EXP_FIELD_ROWID, xp->rowid,
-                           EXP_FIELD_DATE, isodate,
-                           EXP_FIELD_TIME, "",
-                           EXP_FIELD_DESC, xp->desc->s,
-                           EXP_FIELD_AMT, xp->amt,
-                           EXP_FIELD_CATID, xp->catid,
-                           EXP_FIELD_CATNAME, db_find_cat_name(db, xp->catid),
-                           -1);
+        expensestv_set_expense(ls, &it, db, xp);
 
         // (a) Restore previously active row.
         if (xp->rowid == cur_rowid) {
@@ -587,7 +623,7 @@ static void expensestv_refresh(GtkTreeView *tv, db_t *db, gboolean reset_cursor)
 static void expensestv_filter_changed(GtkWidget *w, gpointer data) {
     uictx_t *ctx = data;
     char *sfilter = (char *) gtk_entry_get_text(GTK_ENTRY(ctx->txt_filter));
-    str_assign(ctx->db->view_filter, sfilter);
+    str_assign(ctx->view_filter, sfilter);
 
     cancel_wait_id(&ctx->view_wait_id);
     ctx->view_wait_id = g_timeout_add(200, expensestv_apply_filter, data);
@@ -596,9 +632,7 @@ static void expensestv_filter_changed(GtkWidget *w, gpointer data) {
 static gboolean expensestv_apply_filter(gpointer data) {
     uictx_t *ctx = data;
 
-    db_apply_filter(ctx->db);
-    expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx->db, FALSE);
-
+    expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
     ctx->view_wait_id = 0;
     return G_SOURCE_REMOVE;
 }
@@ -615,8 +649,7 @@ void expensestv_add_expense_row(uictx_t *ctx) {
         expeditdlg_get_expense(d, ctx->db, xp);
         db_add_expense(ctx->db, xp);
 
-        expensestv_apply_filter(ctx);
-        expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx->db, FALSE);
+        expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
         sidebar_populate_year_menu(ctx->yearmenu, ctx);
     }
     expeditdlg_free(d);
@@ -630,7 +663,7 @@ static void expensestv_edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_
     uint rowid;
 
     xp = exp_new();
-    expensestv_get_expense(tv, it, xp);
+    expensestv_get_expense(GTK_LIST_STORE(gtk_tree_view_get_model(tv)), it, xp);
     rowid = xp->rowid;
 
     d = expeditdlg_new(ctx->db, xp);
@@ -640,8 +673,7 @@ static void expensestv_edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_
         assert(xp->rowid == rowid);
         db_update_expense(ctx->db, xp);
 
-        expensestv_apply_filter(ctx);
-        expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx->db, FALSE);
+        expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
         sidebar_populate_year_menu(ctx->yearmenu, ctx);
     }
     expeditdlg_free(d);
@@ -952,7 +984,7 @@ GtkWidget *sidebar_new(uictx_t *ctx) {
     yearmenu = gtk_menu_new();
     sidebar_populate_year_menu(yearmenu, ctx);
 
-    copy_year_str(ctx->db->view_year, syear, sizeof(syear));
+    copy_year_str(ctx->view_year, syear, sizeof(syear));
     yearbtnlabel = gtk_label_new(syear);
     icon = gtk_image_new_from_icon_name("pan-up-symbolic", GTK_ICON_SIZE_BUTTON);
     menubtn_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
@@ -969,7 +1001,7 @@ GtkWidget *sidebar_new(uictx_t *ctx) {
     monthmenu = gtk_menu_new();
     sidebar_populate_month_menu(monthmenu, ctx);
 
-    monthbtnlabel = gtk_label_new(get_month_name(ctx->db->view_month));
+    monthbtnlabel = gtk_label_new(get_month_name(ctx->view_month));
     icon = gtk_image_new_from_icon_name("pan-up-symbolic", GTK_ICON_SIZE_BUTTON);
     menubtn_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
     gtk_box_pack_start(GTK_BOX(menubtn_hbox), monthbtnlabel, FALSE, FALSE, 0);
@@ -1009,10 +1041,10 @@ static void sidebar_refresh(uictx_t *ctx) {
 
     sidebar_populate_year_menu(ctx->yearmenu, ctx);
 
-    copy_year_str(ctx->db->view_year, syear, sizeof(syear));
+    copy_year_str(ctx->view_year, syear, sizeof(syear));
     gtk_label_set_label(GTK_LABEL(ctx->yearbtnlabel), syear);
-    gtk_label_set_label(GTK_LABEL(ctx->monthbtnlabel), get_month_name(ctx->db->view_month));
-    gtk_entry_set_text(GTK_ENTRY(ctx->txt_filter), ctx->db->view_filter->s);
+    gtk_label_set_label(GTK_LABEL(ctx->monthbtnlabel), get_month_name(ctx->view_month));
+    gtk_entry_set_text(GTK_ENTRY(ctx->txt_filter), ctx->view_filter->s);
 }
 
 static void sidebar_populate_year_menu(GtkWidget *menu, uictx_t *ctx) {
@@ -1048,11 +1080,11 @@ static void yearmenu_select(GtkWidget *w, gpointer data) {
     gtk_label_set_label(GTK_LABEL(ctx->yearbtnlabel), mitext);
 
     ulong year = (ulong) g_object_get_data(G_OBJECT(w), "tag");
-    ctx->db->view_year = (uint)year;
-    ctx->db->view_month = 0;
-    gtk_label_set_label(GTK_LABEL(ctx->monthbtnlabel), get_month_name(ctx->db->view_month));
+    ctx->view_year = (uint)year;
+    ctx->view_month = 0;
+    gtk_label_set_label(GTK_LABEL(ctx->monthbtnlabel), get_month_name(ctx->view_month));
 
-    expensestv_apply_filter(ctx);
+    expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
 }
 static void monthmenu_select(GtkWidget *w, gpointer data) {
     uictx_t *ctx = data;
@@ -1061,7 +1093,7 @@ static void monthmenu_select(GtkWidget *w, gpointer data) {
     const gchar *mitext = gtk_menu_item_get_label(GTK_MENU_ITEM(w));
     gtk_label_set_label(GTK_LABEL(ctx->monthbtnlabel), mitext);
 
-    ctx->db->view_month = (uint)month;
-    expensestv_apply_filter(ctx);
+    ctx->view_month = (uint)month;
+    expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
 }
 

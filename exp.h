@@ -21,12 +21,7 @@ typedef struct {
 typedef struct {
     array_t *cats;
     array_t *xps;
-    array_t *view_xps;
     intarray_t *years;
-
-    str_t *view_filter;
-    uint view_year;
-    uint view_month;
 } db_t;
 
 cat_t *cat_new();
@@ -48,7 +43,6 @@ void db_reset(db_t *db);
 
 void db_load_expense_file(db_t *db, FILE *f);
 void db_save_expense_file(db_t *db, FILE *f);
-void db_apply_filter(db_t *db);
 void db_init_exp_years(db_t *db);
 
 void db_update_expense(db_t *db, exp_t *savexp);
