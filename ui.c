@@ -586,8 +586,8 @@ static void expensestv_refresh(GtkTreeView *tv, uictx_t *ctx, gboolean reset_cur
 
     // Turn off selection while refreshing treeview so we don't get
     // bombarded by 'change' events.
-    ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
-    gtk_tree_selection_set_mode(ts, GTK_SELECTION_NONE);
+    //ts = gtk_tree_view_get_selection(GTK_TREE_VIEW(tv));
+    //gtk_tree_selection_set_mode(ts, GTK_SELECTION_NONE);
 
     gtk_list_store_clear(ls);
 
@@ -611,7 +611,7 @@ static void expensestv_refresh(GtkTreeView *tv, uictx_t *ctx, gboolean reset_cur
         }
     }
 
-    gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
+    //gtk_tree_selection_set_mode(ts, GTK_SELECTION_BROWSE);
 
     if (reset_cursor) {
         tp = gtk_tree_path_new_from_string("0");
@@ -641,6 +641,8 @@ void expensestv_add_expense_row(uictx_t *ctx) {
     exp_t *xp;
     ExpenseEditDialog *d;
     gint z;
+    GtkTreeIter it;
+    GtkListStore *ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(ctx->expenses_view)));
 
     xp = exp_new();
     d = expeditdlg_new(ctx->db, xp);
@@ -648,8 +650,9 @@ void expensestv_add_expense_row(uictx_t *ctx) {
     if (z == GTK_RESPONSE_OK) {
         expeditdlg_get_expense(d, ctx->db, xp);
         db_add_expense(ctx->db, xp);
+        gtk_list_store_insert_after(ls, &it, NULL);
+        expensestv_set_expense(ls, &it, ctx->db, xp);
 
-        expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
         sidebar_populate_year_menu(ctx->yearmenu, ctx);
     }
     expeditdlg_free(d);
@@ -661,19 +664,20 @@ static void expensestv_edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_
     ExpenseEditDialog *d;
     gint z;
     uint rowid;
+    GtkListStore *ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
+    db_t *db = ctx->db;
 
     xp = exp_new();
-    expensestv_get_expense(GTK_LIST_STORE(gtk_tree_view_get_model(tv)), it, xp);
+    expensestv_get_expense(ls, it, xp);
     rowid = xp->rowid;
 
-    d = expeditdlg_new(ctx->db, xp);
+    d = expeditdlg_new(db, xp);
     z = gtk_dialog_run(d->dlg);
     if (z == GTK_RESPONSE_OK) {
-        expeditdlg_get_expense(d, ctx->db, xp);
+        expeditdlg_get_expense(d, db, xp);
         assert(xp->rowid == rowid);
-        db_update_expense(ctx->db, xp);
-
-        expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
+        db_update_expense(db, xp);
+        expensestv_set_expense(ls, it, db, xp);
         sidebar_populate_year_menu(ctx->yearmenu, ctx);
     }
     expeditdlg_free(d);

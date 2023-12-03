@@ -1,0 +1,12 @@
+%categories
+1; Coffee
+2; Commute
+3; Food
+4; Dine Out
+5; Grocery
+6; Utilities
+10; Household
+11; Medical
+
+%expenses
+2017-01-10; 00:00; carnitas rice plate century mall; 275.60; 4

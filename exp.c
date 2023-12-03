@@ -112,10 +112,7 @@ db_t *db_new() {
     db->cats = array_new(MAX_CATEGORIES);
     db->xps = array_new(MAX_EXPENSES);
     db->years = intarray_new(MAX_YEARS);
-
-    // Initialize years selection to single "All" (0) item.
-    db->years->items[0] = 0;
-    db->years->len = 1;
+    db_init_exp_years(db);
 
     return db;
 }
@@ -133,6 +130,7 @@ void db_reset(db_t *db) {
 
     array_clear(db->xps);
     intarray_clear(db->years);
+    db_init_exp_years(db);
 }
 
 #define BUFLINE_SIZE 255
@@ -225,7 +223,7 @@ void db_save_expense_file(db_t *db, FILE *f) {
 
     // %expenses
     fprintf(f, "%%%s\n", EXPFILE_EXPENSES);
-    for (int i=1; i < db->xps->len; i++) {
+    for (int i=0; i < db->xps->len; i++) {
         xp = db->xps->items[i];
         date_to_iso(xp->dt, isodate, sizeof(isodate));
         fprintf(f, "%s; %s; %s; %.2f; %d\n", isodate, xp->time->s, xp->desc->s, xp->amt, xp->catid);
