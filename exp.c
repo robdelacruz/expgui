@@ -213,6 +213,8 @@ void db_save_expense_file(db_t *db, FILE *f) {
     exp_t *xp;
     char isodate[ISO_DATE_LEN+1];
 
+    sort_expenses_by_date_desc(db->xps);
+
     // %categories
     fprintf(f, "%%%s\n", EXPFILE_CATEGORIES);
     for (int i=1; i < db->cats->len; i++) {
@@ -390,6 +392,7 @@ void db_add_expense(db_t *db, exp_t *newxp) {
     xp = exp_new();
     exp_dup(xp, newxp);
     xp->rowid = xps->len+1;
+    newxp->rowid = xp->rowid;
     xps->items[xps->len] = xp;
     xps->len++;
 
