@@ -11,8 +11,7 @@ typedef struct {
 
 typedef struct {
     uint rowid;
-    date_t dt;
-    str_t *time;
+    date_t *dt;
     str_t *desc;
     double amt;
     uint catid;

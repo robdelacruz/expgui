@@ -33,22 +33,20 @@ static uint db_next_catid(db_t *db);
 exp_t *exp_new() {
     exp_t *xp = malloc(sizeof(exp_t));
     xp->rowid = 0;
-    xp->dt = date_current();
-    xp->time = str_new(5);
+    xp->dt = date_new_current();
     xp->desc = str_new(0);
     xp->catid = 0;
     xp->amt = 0.0;
     return xp;
 }
 void exp_free(exp_t *xp) {
-    str_free(xp->time);
+    date_free(xp->dt);
     str_free(xp->desc);
     free(xp);
 }
 
 void exp_dup(exp_t *dest, exp_t *src) {
-    dest->dt = src->dt;
-    str_assign(dest->time, src->time->s);
+    date_dup(dest->dt, src->dt);
     str_assign(dest->desc, src->desc->s);
     dest->catid = src->catid;
     dest->amt = src->amt;
@@ -56,25 +54,17 @@ void exp_dup(exp_t *dest, exp_t *src) {
 }
 
 int exp_is_valid(exp_t *xp) {
-    if (date_is_zero(xp->dt) || xp->desc->len == 0)
+    if (xp->desc->len == 0)
         return 0;
     return 1;
 }
 
 static int exp_compare_date_asc(void *xp1, void *xp2) {
-    date_t *dt1 = &((exp_t *)xp1)->dt;
-    date_t *dt2 = &((exp_t *)xp2)->dt;
-    if (dt1->year > dt2->year)
+    date_t *dt1 = ((exp_t *)xp1)->dt;
+    date_t *dt2 = ((exp_t *)xp2)->dt;
+    if (dt1->time > dt2->time)
         return 1;
-    if (dt1->year < dt2->year)
-        return -1;
-    if (dt1->month > dt2->month)
-        return 1;
-    if (dt1->month < dt2->month)
-        return -1;
-    if (dt1->day > dt2->day)
-        return 1;
-    if (dt1->day < dt2->day)
+    if (dt1->time < dt2->time)
         return -1;
     return 0;
 }
@@ -228,7 +218,7 @@ void db_save_expense_file(db_t *db, FILE *f) {
     for (int i=0; i < db->xps->len; i++) {
         xp = db->xps->items[i];
         date_to_iso(xp->dt, isodate, sizeof(isodate));
-        fprintf(f, "%s; %s; %s; %.2f; %d\n", isodate, xp->time->s, xp->desc->s, xp->amt, xp->catid);
+        fprintf(f, "%s; %s; %.2f; %d\n", isodate, xp->desc->s, xp->amt, xp->catid);
     }
 }
 
@@ -282,8 +272,8 @@ static void read_xp_line(char *buf, exp_t *xp) {
     // 2016-05-01; 00:00; Mochi Cream coffee; 100.00; coffee
 
     char *p = buf;
-    p = read_field_date(p, &xp->dt);
-    p = read_field_str(p, xp->time);
+    p = read_field_date(p, xp->dt);
+    //printf("read_xp_line() %d-%d-%d\n", date_year(xp->dt), date_month(xp->dt), date_day(xp->dt));
     p = read_field_str(p, xp->desc);
     p = read_field_double(p, &xp->amt);
     p = read_field_uint(p, &xp->catid);
@@ -316,7 +306,7 @@ static char *read_field(char *startp, char **field) {
 static char *read_field_date(char *startp, date_t *dt) {
     char *sfield;
     char *p = read_field(startp, &sfield);
-    *dt = date_from_iso(sfield);
+    date_assign_iso(dt, sfield);
     return p;
 }
 static char *read_field_double(char *startp, double *f) {
@@ -354,7 +344,7 @@ void db_init_exp_years(db_t *db) {
             break;
 
         exp_t *xp = db->xps->items[i];
-        uint xp_year = xp->dt.year;
+        uint xp_year = date_year(xp->dt);
         if (xp_year < lowest_year) {
             years->items[j] = (int)xp_year;
             lowest_year = xp_year;

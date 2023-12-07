@@ -32,45 +32,100 @@ void panic_err(char *s) {
     abort();
 }
 
-date_t date_zero() {
-    date_t dt = {.month = 0, .day = 0, .year = 0};
+date_t *date_new() {
+    date_t *dt = malloc(sizeof(date_t));
+    dt->tm = malloc(sizeof(struct tm));
+
+    dt->time = 0;
+    localtime_r(&dt->time, dt->tm);
     return dt;
 }
-date_t date_default() {
-    date_t dt = {.month = 1, .day = 1, .year = 1970};
+date_t *date_new_current() {
+    date_t *dt = malloc(sizeof(date_t));
+    dt->tm = malloc(sizeof(struct tm));
+
+    dt->time = time(NULL);
+    localtime_r(&dt->time, dt->tm);
     return dt;
 }
-date_t date_current() {
-    date_t dt;
-    time_t t = time(NULL);
-    struct tm *tm = localtime(&t);
-    if (tm == NULL) {
-        fprintf(stderr, "localtime(): %s\n", strerror(errno));
-        return date_default();
+void date_free(date_t *dt) {
+    free(dt->tm);
+    free(dt);
+}
+static void date_copy_tm(struct tm *dest, struct tm *src) {
+    dest->tm_sec = src->tm_sec;
+    dest->tm_min = src->tm_min;
+    dest->tm_hour = src->tm_hour;
+    dest->tm_mday = src->tm_mday;
+    dest->tm_mon = src->tm_mon;
+    dest->tm_year = src->tm_year;
+    dest->tm_wday = src->tm_wday;
+    dest->tm_yday = src->tm_yday;
+    dest->tm_isdst = src->tm_isdst;
+}
+void date_assign_time(date_t *dt, time_t time) {
+    dt->time = time;
+    localtime_r(&dt->time, dt->tm);
+}
+void date_assign(date_t *dt, uint year, uint month, uint day) {
+    time_t time;
+    struct tm tm;
+    memset(&tm, 0, sizeof(struct tm));
+
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month-1;
+    tm.tm_mday = day;
+    time = mktime(&tm);
+    if (time == -1) {
+        fprintf(stderr, "date_assign(%d, %d, %d) mktime() error\n", year, month, day);
+        return;
     }
 
-    dt.month = tm->tm_mon+1;
-    dt.day = tm->tm_mday;
-    dt.year = tm->tm_year + 1900;
-    return dt;
+    dt->time = time;
+    date_copy_tm(dt->tm, &tm);
 }
-int date_is_zero(date_t dt) {
-    if (dt.year == 0 && dt.month == 0 && dt.day == 0)
-        return 1;
-    return 0;
+void date_assign_iso(date_t *dt, char *isodate) {
+    time_t time;
+    struct tm tm;
+    memset(&tm, 0, sizeof(struct tm));
+
+    if (strptime(isodate, "%F", &tm) == NULL) {
+        fprintf(stderr, "date_assign_iso('%s') strptime() error\n", isodate);
+        return;
+    }
+    time = mktime(&tm);
+    if (time == -1) {
+        fprintf(stderr, "date_assign_iso('%s') mktime() error\n", isodate);
+        return;
+    }
+
+    dt->time = time;
+    date_copy_tm(dt->tm, &tm);
+}
+void date_to_iso(date_t *dt, char *buf, size_t buf_len) {
+    strftime(buf, buf_len, "%F", dt->tm);
+}
+void date_strftime(date_t *dt, char *fmt, char *buf, size_t buf_len) {
+    strftime(buf, buf_len, fmt, dt->tm);
+}
+void date_dup(date_t *dest, date_t *src) {
+    dest->time = src->time;
+    date_copy_tm(dest->tm, src->tm);
+}
+time_t date_time(date_t *dt) {
+    return dt->time;
+}
+int date_year(date_t *dt) {
+    return dt->tm->tm_year + 1900;
+}
+int date_month(date_t *dt) {
+    return dt->tm->tm_mon+1;
+}
+int date_day(date_t *dt) {
+    return dt->tm->tm_mday;
 }
 
-/*** date_t functions ***/
-static int is_valid_date(uint month, uint day, uint year) {
-    if (month < 1 || month > 12)
-        return 0;
-    if (day < 1 || day > 31)
-        return 0;
-    if (year > 9999)
-        return 0;
-    return 1;
-}
-
+#if 0
 date_t date_from_iso(char *s) {
     char buf[11];
     uint month, day, year;
@@ -102,6 +157,7 @@ void date_to_iso(date_t dt, char buf[], size_t buf_len) {
     // 1900-01-01
     snprintf(buf, buf_len, "%04d-%02d-%02d", dt.year, dt.month, dt.day);
 }
+#endif
 
 arena_t new_arena(uint64_t cap) {
     arena_t a; 

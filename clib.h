@@ -28,9 +28,8 @@ typedef struct {
 } str_t;
 
 typedef struct {
-    uint month;
-    uint day;
-    uint year;
+    time_t time;
+    struct tm *tm;
 } date_t;
 
 typedef struct {
@@ -60,12 +59,19 @@ str_t *str_new(size_t cap);
 void str_free(str_t *str);
 void str_assign(str_t *str, char *s);
 
-date_t date_zero();
-date_t date_default();
-date_t date_current();
-int date_is_zero(date_t dt);
-date_t date_from_iso(char *s);
-void date_to_iso(date_t dt, char buf[], size_t buf_len);
+date_t *date_new();
+date_t *date_new_current();
+void date_free(date_t *dt);
+void date_assign_time(date_t *dt, time_t time);
+void date_assign(date_t *dt, uint year, uint month, uint day);
+void date_assign_iso(date_t *dt, char *isodate);
+void date_to_iso(date_t *dt, char *buf, size_t buf_len);
+void date_strftime(date_t *dt, char *fmt, char *buf, size_t buf_len);
+void date_dup(date_t *dest, date_t *src);
+time_t date_time(date_t *dt);
+int date_year(date_t *dt);
+int date_month(date_t *dt);
+int date_day(date_t *dt);
 
 array_t *array_new(size_t cap);
 void array_free(array_t *a);

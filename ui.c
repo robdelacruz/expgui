@@ -41,6 +41,7 @@ static void mainmenu_expense_delete(GtkWidget *w, gpointer data);
 // Expenses Treeview
 GtkWidget *expensestv_new(uictx_t *ctx);
 static void expensestv_amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
+static void expensestv_date_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data);
 static void expensestv_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data);
 static void expensestv_row_changed(GtkTreeSelection *ts, gpointer data);
 static gboolean expensestv_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer data);
@@ -213,8 +214,8 @@ int uictx_open_expense_file(uictx_t *ctx, char *xpfile) {
     // Initialize view year/month to most recent year/month.
     if (db->xps->len > 0) {
         exp_t *xp = db->xps->items[0];
-        ctx->view_year = xp->dt.year;
-        ctx->view_month = xp->dt.month;
+        ctx->view_year = date_year(xp->dt);
+        ctx->view_month = date_month(xp->dt);
     } else {
         ctx->view_year = 0;
         ctx->view_month = 0;
@@ -361,7 +362,6 @@ static void mainmenu_expense_delete(GtkWidget *w, gpointer data) {
 enum exp_field_t {
     EXP_FIELD_ROWID,
     EXP_FIELD_DATE,
-    EXP_FIELD_TIME,
     EXP_FIELD_DESC,
     EXP_FIELD_AMT,
     EXP_FIELD_CATID,
@@ -396,6 +396,7 @@ GtkWidget *expensestv_new(uictx_t *ctx) {
     gtk_tree_view_column_set_sort_column_id(col, EXP_FIELD_DATE);
     gtk_tree_view_column_set_resizable(col, TRUE);
     gtk_cell_renderer_set_padding(r, xpadding, ypadding);
+    gtk_tree_view_column_set_cell_data_func(col, r, expensestv_date_datafunc, ctx, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
 
     r = gtk_cell_renderer_text_new();
@@ -426,8 +427,7 @@ GtkWidget *expensestv_new(uictx_t *ctx) {
 
     ls = gtk_list_store_new(EXP_FIELD_NCOLS,
                             G_TYPE_UINT,   // EXP_FIELD_ROWID
-                            G_TYPE_STRING, // EXP_FIELD_DATE
-                            G_TYPE_STRING, // EXP_FIELD_TIME
+                            G_TYPE_LONG,   // EXP_FIELD_DATE
                             G_TYPE_STRING, // EXP_FIELD_DESC
                             G_TYPE_DOUBLE, // EXP_FIELD_AMT
                             G_TYPE_UINT,   // EXP_FIELD_CATID
@@ -460,6 +460,26 @@ static void expensestv_amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, 
 
     gtk_tree_model_get(m, it, EXP_FIELD_AMT, &amt, -1);
     snprintf(buf, sizeof(buf), "%9.2f", amt);
+    g_object_set(r, "text", buf, NULL);
+}
+static void expensestv_date_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data) {
+    uictx_t *ctx = data;
+    date_t *dt = date_new();
+    time_t time;
+    char buf[30];
+    char *fmt;
+
+    gtk_tree_model_get(m, it, EXP_FIELD_DATE, &time, -1);
+    date_assign_time(dt, time);
+
+    if (ctx->view_year == 0)
+        fmt = "%Y-%m-%d";
+    else if (ctx->view_month == 0)
+        fmt = "%b %d";
+    else
+        fmt = "%a %d";
+
+    date_strftime(dt, fmt, buf, sizeof(buf));
     g_object_set(r, "text", buf, NULL);
 }
 
@@ -524,35 +544,26 @@ static gboolean expensestv_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer da
 }
 
 static void expensestv_get_expense(GtkListStore *ls, GtkTreeIter *it, exp_t *xp) {
-    char *isodate;
-    gchar *stime;
+    time_t time;
     gchar *desc;
 
     gtk_tree_model_get(GTK_TREE_MODEL(ls), it,
                        EXP_FIELD_ROWID, &xp->rowid,
-                       EXP_FIELD_DATE, &isodate,
-                       EXP_FIELD_TIME, &stime,
+                       EXP_FIELD_DATE, &time,
                        EXP_FIELD_DESC, &desc,
                        EXP_FIELD_AMT, &xp->amt,
                        EXP_FIELD_CATID, &xp->catid,
                        -1);
 
-    xp->dt = date_from_iso(isodate);
-    str_assign(xp->time, stime);
+    date_assign_time(xp->dt, time);
     str_assign(xp->desc, desc);
 
-    g_free(isodate);
-    g_free(stime);
     g_free(desc);
 }
 static void expensestv_set_expense(GtkListStore *ls, GtkTreeIter *it, db_t *db, exp_t *xp) {
-    char isodate[ISO_DATE_LEN+1];
-    date_to_iso(xp->dt, isodate, sizeof(isodate));
-
     gtk_list_store_set(ls, it, 
                        EXP_FIELD_ROWID, xp->rowid,
-                       EXP_FIELD_DATE, isodate,
-                       EXP_FIELD_TIME, xp->time->s,
+                       EXP_FIELD_DATE, date_time(xp->dt),
                        EXP_FIELD_DESC, xp->desc->s,
                        EXP_FIELD_AMT, xp->amt,
                        EXP_FIELD_CATID, xp->catid,
@@ -595,9 +606,9 @@ static void expensestv_refresh(GtkTreeView *tv, uictx_t *ctx, gboolean reset_cur
         xp = db->xps->items[i];
         if (filter->len != 0 && strcasestr(xp->desc->s, filter->s) == NULL)
             continue;
-        if (year != 0 && year != xp->dt.year)
+        if (year != 0 && year != date_year(xp->dt))
             continue;
-        if (month != 0 && month != xp->dt.month)
+        if (month != 0 && month != date_month(xp->dt))
             continue;
 
         gtk_list_store_append(ls, &it);
@@ -676,8 +687,8 @@ void expensestv_add_expense_row(uictx_t *ctx) {
         expeditdlg_get_expense(d, ctx->db, xp);
         db_add_expense(ctx->db, xp);
 
-        ctx->view_year = xp->dt.year;
-        ctx->view_month = xp->dt.month;
+        ctx->view_year = date_year(xp->dt);
+        ctx->view_month = date_month(xp->dt);
         expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
         expensestv_set_cursor_to_exp(GTK_TREE_VIEW(ctx->expenses_view), xp);
         sidebar_refresh(ctx);
@@ -787,8 +798,8 @@ static ExpenseEditDialog *expeditdlg_new(db_t *db, exp_t *xp) {
     }
     gtk_combo_box_set_active(GTK_COMBO_BOX(cbcat), cat_row_from_id(db, xp->catid));
 
-    gtk_calendar_select_month(GTK_CALENDAR(cal), xp->dt.month-1, xp->dt.year);
-    gtk_calendar_select_day(GTK_CALENDAR(cal), xp->dt.day);
+    gtk_calendar_select_month(GTK_CALENDAR(cal), date_month(xp->dt)-1, date_year(xp->dt));
+    gtk_calendar_select_day(GTK_CALENDAR(cal), date_day(xp->dt));
 
     tbl = gtk_table_new(4, 2, FALSE);
     gtk_table_set_row_spacings(GTK_TABLE(tbl), 5);
@@ -839,8 +850,7 @@ static void expeditdlg_get_expense(ExpenseEditDialog *d, db_t *db, exp_t *xp) {
     const gchar *samt = gtk_entry_get_text(d->txt_amt);
     int cbrow;
 
-    xp->dt = date_from_iso((char*) sdate);
-    str_assign(xp->time, "00:00");
+    date_assign_iso(xp->dt, (char*) sdate);
     str_assign(xp->desc, (char*)sdesc);
     xp->amt = atof(samt);
     xp->catid = cat_id_from_row(db, gtk_combo_box_get_active(d->cbcat));
@@ -957,11 +967,13 @@ static gboolean expeditdlg_date_key_press_event(GtkEntry *ed, GdkEventKey *e, gp
 }
 static void expeditdlg_cal_day_selected_event(GtkCalendar *cal, gpointer data) {
     ExpenseEditDialog *d = data;
-    date_t dt;
+    date_t *dt = date_new();
+    uint year, month, day;
     char isodate[ISO_DATE_LEN+1];
 
-    gtk_calendar_get_date(d->cal, &dt.year, &dt.month, &dt.day);
-    dt.month += 1;
+    gtk_calendar_get_date(d->cal, &year, &month, &day);
+    month += 1;
+    date_assign(dt, year, month, day);
 
     date_to_iso(dt, isodate, sizeof(isodate));
     gtk_entry_set_text(d->txt_date, isodate); 

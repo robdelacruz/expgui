@@ -9,4 +9,4 @@
 11; Medical
 
 %expenses
-2017-01-10; 00:00; carnitas rice plate century mall; 275.60; 4
+2018-02-25; carnitas rice plate century mall; 275.60; 4
