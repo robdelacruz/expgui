@@ -20,6 +20,12 @@ dep:
 t: $(PROGSRC) $(LIBSRC)
 	gcc $(CFLAGS) -o t $(PROGSRC) $(LIBSRC) $(LIBS)
 
+sqlite3.o: sqlite3.c
+	gcc -c -o sqlite3.o sqlite3.c
+
+t2: t2.c sqlite3.o $(LIBSRC)
+	gcc $(CFLAGS) -o t2 t2.c sqlite3.o $(LIBSRC) $(LIBS)
+
 clean:
-	rm -rf t
+	rm -rf t t2
 
