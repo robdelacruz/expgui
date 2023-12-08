@@ -32,15 +32,15 @@ void panic_err(char *s) {
     abort();
 }
 
-date_t *date_new() {
+date_t *date_new(time_t t) {
     date_t *dt = malloc(sizeof(date_t));
     dt->tm = malloc(sizeof(struct tm));
 
-    dt->time = 0;
+    dt->time = t;
     localtime_r(&dt->time, dt->tm);
     return dt;
 }
-date_t *date_new_current() {
+date_t *date_new_today() {
     date_t *dt = malloc(sizeof(date_t));
     dt->tm = malloc(sizeof(struct tm));
 
@@ -48,11 +48,31 @@ date_t *date_new_current() {
     localtime_r(&dt->time, dt->tm);
     return dt;
 }
+date_t *date_new_cal(uint year, uint month, uint day) {
+    date_t *dt = malloc(sizeof(date_t));
+    dt->tm = malloc(sizeof(struct tm));
+
+    if (date_assign_cal(dt, year, month, day) != 0) {
+        dt->time = time(NULL);
+        localtime_r(&dt->time, dt->tm);
+    }
+    return dt;
+}
+date_t *date_new_iso(char *isodate) {
+    date_t *dt = malloc(sizeof(date_t));
+    dt->tm = malloc(sizeof(struct tm));
+
+    if (date_assign_iso(dt, isodate) != 0) {
+        dt->time = time(NULL);
+        localtime_r(&dt->time, dt->tm);
+    }
+    return dt;
+}
 void date_free(date_t *dt) {
     free(dt->tm);
     free(dt);
 }
-static void date_copy_tm(struct tm *dest, struct tm *src) {
+static void date_dup_tm(struct tm *dest, struct tm *src) {
     dest->tm_sec = src->tm_sec;
     dest->tm_min = src->tm_min;
     dest->tm_hour = src->tm_hour;
@@ -67,7 +87,7 @@ void date_assign_time(date_t *dt, time_t time) {
     dt->time = time;
     localtime_r(&dt->time, dt->tm);
 }
-void date_assign(date_t *dt, uint year, uint month, uint day) {
+int date_assign_cal(date_t *dt, uint year, uint month, uint day) {
     time_t time;
     struct tm tm;
     memset(&tm, 0, sizeof(struct tm));
@@ -78,29 +98,31 @@ void date_assign(date_t *dt, uint year, uint month, uint day) {
     time = mktime(&tm);
     if (time == -1) {
         fprintf(stderr, "date_assign(%d, %d, %d) mktime() error\n", year, month, day);
-        return;
+        return 1;
     }
 
     dt->time = time;
-    date_copy_tm(dt->tm, &tm);
+    date_dup_tm(dt->tm, &tm);
+    return 0;
 }
-void date_assign_iso(date_t *dt, char *isodate) {
+int date_assign_iso(date_t *dt, char *isodate) {
     time_t time;
     struct tm tm;
     memset(&tm, 0, sizeof(struct tm));
 
     if (strptime(isodate, "%F", &tm) == NULL) {
         fprintf(stderr, "date_assign_iso('%s') strptime() error\n", isodate);
-        return;
+        return errno;
     }
     time = mktime(&tm);
     if (time == -1) {
         fprintf(stderr, "date_assign_iso('%s') mktime() error\n", isodate);
-        return;
+        return errno;
     }
 
     dt->time = time;
-    date_copy_tm(dt->tm, &tm);
+    date_dup_tm(dt->tm, &tm);
+    return 0;
 }
 void date_to_iso(date_t *dt, char *buf, size_t buf_len) {
     strftime(buf, buf_len, "%F", dt->tm);
@@ -110,7 +132,7 @@ void date_strftime(date_t *dt, char *fmt, char *buf, size_t buf_len) {
 }
 void date_dup(date_t *dest, date_t *src) {
     dest->time = src->time;
-    date_copy_tm(dest->tm, src->tm);
+    date_dup_tm(dest->tm, src->tm);
 }
 time_t date_time(date_t *dt) {
     return dt->time;

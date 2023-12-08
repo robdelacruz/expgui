@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <ctype.h>
+#include <locale.h>
 
 #include "ui.h"
 
@@ -169,6 +170,8 @@ void uictx_setup_ui(uictx_t *ctx) {
     GtkWidget *expenses_frame;
     GtkWidget *sidebar;
     GtkWidget *main_vbox;
+
+    setlocale(LC_NUMERIC, "");
 
     // mainwin
     mainwin = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -459,18 +462,18 @@ static void expensestv_amt_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, 
     char buf[15];
 
     gtk_tree_model_get(m, it, EXP_FIELD_AMT, &amt, -1);
-    snprintf(buf, sizeof(buf), "%9.2f", amt);
+    snprintf(buf, sizeof(buf), "%'9.2f", amt);
     g_object_set(r, "text", buf, NULL);
 }
 static void expensestv_date_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r, GtkTreeModel *m, GtkTreeIter *it, gpointer data) {
     uictx_t *ctx = data;
-    date_t *dt = date_new();
+    date_t *dt;
     time_t time;
     char buf[30];
     char *fmt;
 
     gtk_tree_model_get(m, it, EXP_FIELD_DATE, &time, -1);
-    date_assign_time(dt, time);
+    dt = date_new(time);
 
     if (ctx->view_year == 0)
         fmt = "%Y-%m-%d";
@@ -481,6 +484,7 @@ static void expensestv_date_datafunc(GtkTreeViewColumn *col, GtkCellRenderer *r,
 
     date_strftime(dt, fmt, buf, sizeof(buf));
     g_object_set(r, "text", buf, NULL);
+    date_free(dt);
 }
 
 static void expensestv_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
@@ -750,18 +754,13 @@ static ExpenseEditDialog *expeditdlg_new(db_t *db, exp_t *xp) {
     GtkWidget *cal;
     GtkWidget *vboxdate;
     GtkWidget *tbl;
+    GtkWidget *btnok, *btncancel;
     char samt[12];
     char isodate[ISO_DATE_LEN+1];
     cat_t *cat;
 
-    dlg = gtk_dialog_new_with_buttons("Edit Expense", NULL, GTK_DIALOG_MODAL,
-                                      GTK_STOCK_OK, GTK_RESPONSE_OK,
-                                      GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
-                                      NULL);
-    gtk_dialog_set_default_response(GTK_DIALOG(dlg), GTK_RESPONSE_CANCEL);
-    GtkWidget *btn_ok = gtk_dialog_get_widget_for_response(GTK_DIALOG(dlg), GTK_RESPONSE_OK); 
-    if (btn_ok)
-        gtk_widget_grab_focus(btn_ok);
+    dlg = gtk_dialog_new();
+    gtk_dialog_set_default_response(GTK_DIALOG(dlg), GTK_RESPONSE_OK);
 
     lbl_date = gtk_label_new("Date");
     lbl_desc = gtk_label_new("Description");
@@ -775,6 +774,7 @@ static ExpenseEditDialog *expeditdlg_new(db_t *db, exp_t *xp) {
     g_object_set(lbl_cat, "xalign", 0.0, NULL);
 
     txt_date = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(txt_date), "YYYY-MM-DD");
     gtk_entry_set_icon_from_icon_name(GTK_ENTRY(txt_date), GTK_ENTRY_ICON_SECONDARY, "x-office-calendar-symbolic");
     cal = gtk_calendar_new();
     vboxdate = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -816,8 +816,13 @@ static ExpenseEditDialog *expeditdlg_new(db_t *db, exp_t *xp) {
 
     dlgbox = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
     gtk_box_pack_start(GTK_BOX(dlgbox), tbl, TRUE, TRUE, 0);
-    gtk_widget_show_all(dlg);
 
+    btnok = gtk_button_new_with_label("OK");
+    btncancel = gtk_button_new_with_label("Cancel");
+    gtk_dialog_add_action_widget(GTK_DIALOG(dlg), btnok, GTK_RESPONSE_OK);
+    gtk_dialog_add_action_widget(GTK_DIALOG(dlg), btncancel, GTK_RESPONSE_CANCEL);
+
+    gtk_widget_show_all(dlg);
     gtk_widget_hide(cal);
 
     d = malloc(sizeof(ExpenseEditDialog));
@@ -831,9 +836,9 @@ static ExpenseEditDialog *expeditdlg_new(db_t *db, exp_t *xp) {
 
     g_signal_connect(txt_amt, "insert-text", G_CALLBACK(expeditdlg_amt_insert_text_event), NULL);
     g_signal_connect(txt_date, "icon-press", G_CALLBACK(expeditdlg_date_icon_press_event), d);
-    g_signal_connect(txt_date, "insert-text", G_CALLBACK(expeditdlg_date_insert_text_event), NULL);
-    g_signal_connect(txt_date, "delete-text", G_CALLBACK(expeditdlg_date_delete_text_event), NULL);
-    g_signal_connect(txt_date, "key-press-event", G_CALLBACK(expeditdlg_date_key_press_event), NULL);
+//    g_signal_connect(txt_date, "insert-text", G_CALLBACK(expeditdlg_date_insert_text_event), NULL);
+//    g_signal_connect(txt_date, "delete-text", G_CALLBACK(expeditdlg_date_delete_text_event), NULL);
+//    g_signal_connect(txt_date, "key-press-event", G_CALLBACK(expeditdlg_date_key_press_event), NULL);
     g_signal_connect(cal, "day-selected", G_CALLBACK(expeditdlg_cal_day_selected_event), d);
     g_signal_connect(cal, "day-selected-double-click", G_CALLBACK(expeditdlg_cal_day_selected_dblclick_event), d);
 
@@ -850,7 +855,10 @@ static void expeditdlg_get_expense(ExpenseEditDialog *d, db_t *db, exp_t *xp) {
     const gchar *samt = gtk_entry_get_text(d->txt_amt);
     int cbrow;
 
-    date_assign_iso(xp->dt, (char*) sdate);
+    if (date_assign_iso(xp->dt, (char*) sdate) != 0)
+        date_assign_time(xp->dt, time(NULL));
+    if (strlen(sdesc) == 0)
+        sdesc = "New Expense";
     str_assign(xp->desc, (char*)sdesc);
     xp->amt = atof(samt);
     xp->catid = cat_id_from_row(db, gtk_combo_box_get_active(d->cbcat));
@@ -967,16 +975,17 @@ static gboolean expeditdlg_date_key_press_event(GtkEntry *ed, GdkEventKey *e, gp
 }
 static void expeditdlg_cal_day_selected_event(GtkCalendar *cal, gpointer data) {
     ExpenseEditDialog *d = data;
-    date_t *dt = date_new();
+    date_t *dt;
     uint year, month, day;
     char isodate[ISO_DATE_LEN+1];
 
     gtk_calendar_get_date(d->cal, &year, &month, &day);
     month += 1;
-    date_assign(dt, year, month, day);
+    dt = date_new_cal(year, month, day);
 
     date_to_iso(dt, isodate, sizeof(isodate));
     gtk_entry_set_text(d->txt_date, isodate); 
+    date_free(dt);
 }
 static void expeditdlg_cal_day_selected_dblclick_event(GtkCalendar *cal, gpointer data) {
     ExpenseEditDialog *d = data;

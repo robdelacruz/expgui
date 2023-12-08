@@ -3,6 +3,7 @@ todo:
 - Manage categories
 - Category subtotals
 - Year to date subtotals per month
+- Format amount with commas 1,234.50
 
 Set treeview sort order:
 //    gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(ls), EXP_FIELD_ROWID, GTK_SORT_DESCENDING);

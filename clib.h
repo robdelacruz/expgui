@@ -59,12 +59,14 @@ str_t *str_new(size_t cap);
 void str_free(str_t *str);
 void str_assign(str_t *str, char *s);
 
-date_t *date_new();
-date_t *date_new_current();
+date_t *date_new(time_t t);
+date_t *date_new_today();
+date_t *date_new_cal(uint year, uint month, uint day);
+date_t *date_new_iso(char *isodate);
 void date_free(date_t *dt);
 void date_assign_time(date_t *dt, time_t time);
-void date_assign(date_t *dt, uint year, uint month, uint day);
-void date_assign_iso(date_t *dt, char *isodate);
+int date_assign_cal(date_t *dt, uint year, uint month, uint day);
+int date_assign_iso(date_t *dt, char *isodate);
 void date_to_iso(date_t *dt, char *buf, size_t buf_len);
 void date_strftime(date_t *dt, char *fmt, char *buf, size_t buf_len);
 void date_dup(date_t *dest, date_t *src);

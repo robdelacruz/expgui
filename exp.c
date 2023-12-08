@@ -33,7 +33,7 @@ static uint db_next_catid(db_t *db);
 exp_t *exp_new() {
     exp_t *xp = malloc(sizeof(exp_t));
     xp->rowid = 0;
-    xp->dt = date_new_current();
+    xp->dt = date_new_today();
     xp->desc = str_new(0);
     xp->catid = 0;
     xp->amt = 0.0;
@@ -388,6 +388,9 @@ void db_add_expense(db_t *db, exp_t *newxp) {
 
     sort_expenses_by_date_desc(db->xps);
     db_init_exp_years(db);
+}
+
+void db_del_expense(db_t *db, exp_t *xp) {
 }
 
 void db_update_cat(db_t *db, cat_t *savecat) {
