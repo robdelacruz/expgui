@@ -266,6 +266,12 @@ void array_clear(array_t *a) {
     memset(a->items, 0, a->cap);
     a->len = 0;
 }
+void array_del(array_t *a, uint idx) {
+    for (int i=idx; i < a->len-1; i++) {
+        a->items[i] = a->items[i+1];
+    }
+    a->len--;
+}
 intarray_t *intarray_new(size_t cap) {
     intarray_t *a = malloc(sizeof(intarray_t));
     a->items = malloc(sizeof(a->items[0]) * cap);
