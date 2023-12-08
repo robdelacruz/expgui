@@ -79,6 +79,7 @@ array_t *array_new(size_t cap);
 void array_free(array_t *a);
 void array_assign(array_t *a, void **items, size_t len, size_t cap);
 void array_clear(array_t *a);
+int array_add(array_t *a, void *p);
 void array_del(array_t *a, uint idx);
 
 intarray_t *intarray_new(size_t cap);

@@ -33,9 +33,6 @@ void exp_free(exp_t *xp);
 void exp_dup(exp_t *destxp, exp_t *srcxp);
 int exp_is_valid(exp_t *xp);
 
-void sort_expenses_by_date_asc(array_t *xps);
-void sort_expenses_by_date_desc(array_t *xps);
-
 db_t *db_new();
 void db_free(db_t *db);
 void db_reset(db_t *db);

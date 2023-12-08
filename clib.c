@@ -266,6 +266,13 @@ void array_clear(array_t *a) {
     memset(a->items, 0, a->cap);
     a->len = 0;
 }
+int array_add(array_t *a, void *p) {
+    if (a->len >= a->cap)
+        return 1;
+    a->items[a->len] = p;
+    a->len++;
+    return 0;
+}
 void array_del(array_t *a, uint idx) {
     for (int i=idx; i < a->len-1; i++) {
         a->items[i] = a->items[i+1];
