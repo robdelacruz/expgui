@@ -705,7 +705,7 @@ void expensestv_add_expense_row(uictx_t *ctx) {
         ctx->view_year = date_year(xp->dt);
         ctx->view_month = date_month(xp->dt);
         expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
-        expensestv_set_cursor_to_rowid(GTK_TREE_VIEW(ctx->expenses_view), xp->rowid);
+        //$$ expensestv_set_cursor_to_rowid(GTK_TREE_VIEW(ctx->expenses_view), xp->rowid);
         sidebar_refresh(ctx);
     }
     expeditdlg_free(d);
