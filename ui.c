@@ -47,8 +47,8 @@ static void expensestv_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeVi
 static void expensestv_row_changed(GtkTreeSelection *ts, gpointer data);
 static gboolean expensestv_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer data);
 
-static void expensestv_get_expense(GtkListStore *ls, GtkTreeIter *it, exp_t *xp);
-static void expensestv_set_expense(GtkListStore *ls, GtkTreeIter *it, db_t *db, exp_t *xp);
+static void expensestv_get_expense(GtkTreeModel *m, GtkTreeIter *it, exp_t *xp);
+static void expensestv_set_expense(GtkListStore *m, GtkTreeIter *it, db_t *db, exp_t *xp);
 static void expensestv_refresh(GtkTreeView *tv, uictx_t *ctx, gboolean reset_cursor);
 static void expensestv_set_cursor_to_rowid(GtkTreeView *tv, uint rowid);
 static void expensestv_filter_changed(GtkWidget *w, gpointer data);
@@ -558,11 +558,29 @@ static gboolean expensestv_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer da
     return FALSE;
 }
 
-static void expensestv_get_expense(GtkListStore *ls, GtkTreeIter *it, exp_t *xp) {
+static gboolean tv_get_selected_it(GtkTreeView *tv, GtkTreeIter *it) {
+    GtkTreeSelection *ts = gtk_tree_view_get_selection(tv);
+    return gtk_tree_selection_get_selected(ts, NULL, it);
+}
+static gboolean tv_get_prev_it(GtkTreeView *tv, GtkTreeIter *it) {
+    GtkTreeModel *m = gtk_tree_view_get_model(tv);
+    return gtk_tree_model_iter_previous(m, it);
+}
+static gboolean tv_get_next_it(GtkTreeView *tv, GtkTreeIter *it) {
+    GtkTreeModel *m = gtk_tree_view_get_model(tv);
+    return gtk_tree_model_iter_next(m, it);
+}
+static void tv_set_cursor(GtkTreeView *tv, GtkTreeIter *it) {
+    GtkTreeModel *m = gtk_tree_view_get_model(tv);
+    GtkTreePath *tp = gtk_tree_model_get_path(m, it);
+    gtk_tree_view_set_cursor(tv, tp, NULL, FALSE);
+}
+
+static void expensestv_get_expense(GtkTreeModel *m, GtkTreeIter *it, exp_t *xp) {
     time_t time;
     gchar *desc;
 
-    gtk_tree_model_get(GTK_TREE_MODEL(ls), it,
+    gtk_tree_model_get(m, it,
                        EXP_FIELD_ROWID, &xp->rowid,
                        EXP_FIELD_DATE, &time,
                        EXP_FIELD_DESC, &desc,
@@ -575,8 +593,8 @@ static void expensestv_get_expense(GtkListStore *ls, GtkTreeIter *it, exp_t *xp)
 
     g_free(desc);
 }
-static void expensestv_set_expense(GtkListStore *ls, GtkTreeIter *it, db_t *db, exp_t *xp) {
-    gtk_list_store_set(ls, it, 
+static void expensestv_set_expense(GtkListStore *m, GtkTreeIter *it, db_t *db, exp_t *xp) {
+    gtk_list_store_set(m, it, 
                        EXP_FIELD_ROWID, xp->rowid,
                        EXP_FIELD_DATE, date_time(xp->dt),
                        EXP_FIELD_DESC, xp->desc->s,
@@ -691,9 +709,9 @@ void expensestv_add_expense_row(uictx_t *ctx) {
     exp_t *xp;
     ExpenseEditDialog *d;
     gint z;
-    GtkTreeIter it0;
     GtkTreeIter it;
     GtkListStore *ls = GTK_LIST_STORE(gtk_tree_view_get_model(GTK_TREE_VIEW(ctx->expenses_view)));
+    db_t *db = ctx->db;
 
     xp = exp_new();
     d = expeditdlg_new(ctx->db, xp);
@@ -705,7 +723,6 @@ void expensestv_add_expense_row(uictx_t *ctx) {
         ctx->view_year = date_year(xp->dt);
         ctx->view_month = date_month(xp->dt);
         expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
-        //$$ expensestv_set_cursor_to_rowid(GTK_TREE_VIEW(ctx->expenses_view), xp->rowid);
         sidebar_refresh(ctx);
     }
     expeditdlg_free(d);
@@ -717,11 +734,10 @@ static void expensestv_edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_
     ExpenseEditDialog *d;
     gint z;
     uint rowid;
-    GtkListStore *ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
     db_t *db = ctx->db;
 
     xp = exp_new();
-    expensestv_get_expense(ls, it, xp);
+    expensestv_get_expense(gtk_tree_view_get_model(tv), it, xp);
     rowid = xp->rowid;
 
     d = expeditdlg_new(db, xp);
@@ -731,7 +747,8 @@ static void expensestv_edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_
         assert(xp->rowid == rowid);
         db_update_expense(db, xp);
 
-        expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, TRUE);
+        expensestv_set_expense(GTK_LIST_STORE(gtk_tree_view_get_model(tv)), it, db, xp);
+        //expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, TRUE);
         sidebar_refresh(ctx);
     }
     expeditdlg_free(d);
@@ -740,13 +757,17 @@ static void expensestv_edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_
 static void expensestv_del_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_t *ctx) {
     exp_t *xp;
     GtkTreeIter it0 = *it;
-    GtkTreePath *tp;
-    GtkListStore *ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
     db_t *db = ctx->db;
 
     xp = exp_new();
-    expensestv_get_expense(ls, it, xp);
+    expensestv_get_expense(gtk_tree_view_get_model(tv), it, xp);
     db_del_expense(db, xp);
+
+    //if (tv_get_next_it(tv, it))
+    //    tv_set_cursor(tv, it);
+    //else if (tv_get_prev_it(tv, it))
+    //    tv_set_cursor(tv, it);
+    //gtk_list_store_remove(ls, &it0);
 
     expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, TRUE);
     sidebar_refresh(ctx);
