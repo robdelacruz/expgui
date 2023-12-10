@@ -1,4 +1,6 @@
 *.swp
+*.o
+*.db
 t
 t2
 .gitignore
