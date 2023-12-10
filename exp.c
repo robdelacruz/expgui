@@ -81,9 +81,27 @@ static void sort_expenses_by_date_asc(array_t *xps) {
 static void sort_expenses_by_date_desc(array_t *xps) {
     sort_array(xps->items, xps->len, exp_compare_date_desc);
 }
+// Sort xps by date (descending) and desc (ascending)
+static int exp_compare_default(void *xp1, void *xp2) {
+    date_t *dt1 = ((exp_t *)xp1)->dt;
+    date_t *dt2 = ((exp_t *)xp2)->dt;
+    char *desc1 = ((exp_t *)xp1)->desc->s;
+    char *desc2 = ((exp_t *)xp2)->desc->s;
+    assert(desc1 != NULL);
+    assert(desc2 != NULL);
+
+    if (dt1->time > dt2->time)
+        return -1;
+    if (dt1->time < dt2->time)
+        return 1;
+    return strcasecmp(desc1, desc2);
+}
+static void sort_expenses_default(array_t *xps) {
+    sort_array(xps->items, xps->len, exp_compare_default);
+}
 static void reorder_expenses(array_t *xps) {
     exp_t *xp;
-    sort_expenses_by_date_desc(xps);
+    sort_expenses_default(xps);
 
     for (int i=0; i < xps->len; i++) {
         xp = xps->items[i];
@@ -143,8 +161,6 @@ void db_load_expense_file(db_t *db, FILE *f) {
     array_t *xps = db->xps;
     array_t *cats = db->cats;
     cat_t *cat;
-    size_t count_xps = 0;
-    size_t count_cats = 0;
     int lineno = 1;
     char *buf;
     size_t buf_size;
@@ -156,8 +172,8 @@ void db_load_expense_file(db_t *db, FILE *f) {
     cat = cat_new();
     cat->id = 0;
     str_assign(cat->name, CAT_UNCATEGORIZED);
+    array_add(cats, cat);
     db->cats->items[0] = cat;
-    count_cats = 1;
 
     buf = malloc(BUFLINE_SIZE);
     buf_size = BUFLINE_SIZE;
@@ -200,9 +216,12 @@ void db_load_expense_file(db_t *db, FILE *f) {
     }
 
     free(buf);
-    if (count_xps > xps->cap-1)
+
+    assert(xps->len <= xps->cap);
+    assert(cats->len <= cats->cap);
+    if (xps->len == xps->cap)
         fprintf(stderr, "Max expenses (%ld) reached.\n", xps->cap);
-    if (count_cats > cats->cap-1)
+    if (cats->len == cats->cap)
         fprintf(stderr, "Max categories (%ld) reached.\n", cats->cap);
 
     reorder_expenses(xps);
@@ -242,7 +261,7 @@ static void add_xp(char *buf, int lineno, array_t *xps) {
         return;
     }
     if (array_add(xps, xp) != 0) {
-        fprintf(stderr, "Maximum number of expenses reached: %ld\n", xps->cap);
+        //fprintf(stderr, "Maximum number of expenses reached: %ld\n", xps->cap);
         exp_free(xp);
         return;
     }
@@ -256,7 +275,7 @@ static void add_cat(char *buf, int lineno, array_t *cats) {
         return;
     }
     if (array_add(cats, cat) != 0) {
-        fprintf(stderr, "Maximum number of categories reached: %ld\n", cats->cap);
+        //fprintf(stderr, "Maximum number of categories reached: %ld\n", cats->cap);
         cat_free(cat);
         return;
     }
@@ -361,38 +380,63 @@ void db_update_expense(db_t *db, exp_t *savexp) {
     array_t *xps = db->xps;
     exp_t *xp;
 
+    if (savexp->rowid > xps->len-1)
+        return;
+    xp = xps->items[savexp->rowid];
+    assert(xp->rowid == savexp->rowid);
+
+    exp_dup(xp, savexp);
+    reorder_expenses(xps);
+    db_init_exp_years(db);
+    
+
+#if 0
     for (int i=0; i < xps->len; i++) {
         xp = xps->items[i];
         if (xp->rowid == savexp->rowid) {
+            printf("db_update_expense() savexp->rowid: %d, xp->rowid: %d\n", savexp->rowid, xp->rowid);
             exp_dup(xp, savexp);
             reorder_expenses(db->xps);
             db_init_exp_years(db);
             return;
         }
     }
+#endif
 }
 
-void db_add_expense(db_t *db, exp_t *newxp) {
+int db_add_expense(db_t *db, exp_t *newxp) {
     array_t *xps = db->xps;
     exp_t *xp;
 
     assert(xps->len <= xps->cap);
     if (xps->len == xps->cap) {
         printf("Maximum number of expenses (%ld) reached.\n", xps->cap);
-        return;
+        return 1;
     }
 
     xp = exp_new();
     exp_dup(xp, newxp);
-    //xp->rowid = xps->len+1;
-    //newxp->rowid = xp->rowid;
     array_add(xps, xp);
 
     reorder_expenses(db->xps);
     db_init_exp_years(db);
+    return 0;
 }
 
-void db_del_expense(db_t *db, exp_t *xp) {
+void db_del_expense(db_t *db, exp_t *delxp) {
+    array_t *xps = db->xps;
+    exp_t *xp;
+
+    if (delxp->rowid > xps->len-1)
+        return;
+    xp = xps->items[delxp->rowid];
+    assert(xp->rowid == delxp->rowid);
+
+    array_del(xps, xp->rowid);
+    exp_free(xp);
+
+    reorder_expenses(xps);
+    db_init_exp_years(db);
 }
 
 void db_update_cat(db_t *db, cat_t *savecat) {

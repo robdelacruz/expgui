@@ -731,8 +731,8 @@ static void expensestv_edit_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_
         assert(xp->rowid == rowid);
         db_update_expense(db, xp);
 
-        expensestv_set_expense(ls, it, db, xp);
-        sidebar_populate_year_menu(ctx->yearmenu, ctx);
+        expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, TRUE);
+        sidebar_refresh(ctx);
     }
     expeditdlg_free(d);
     exp_free(xp);
@@ -748,7 +748,7 @@ static void expensestv_del_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_t
     expensestv_get_expense(ls, it, xp);
     db_del_expense(db, xp);
 
-    expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
+    expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, TRUE);
     sidebar_refresh(ctx);
 
     exp_free(xp);

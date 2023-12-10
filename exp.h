@@ -42,7 +42,7 @@ void db_save_expense_file(db_t *db, FILE *f);
 void db_init_exp_years(db_t *db);
 
 void db_update_expense(db_t *db, exp_t *savexp);
-void db_add_expense(db_t *db, exp_t *newxp);
+int db_add_expense(db_t *db, exp_t *newxp);
 void db_del_expense(db_t *db, exp_t *xp);
 void db_update_cat(db_t *db, cat_t *cat);
 void db_add_cat(db_t *db, cat_t *cat);
