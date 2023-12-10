@@ -722,7 +722,9 @@ void expensestv_add_expense_row(uictx_t *ctx) {
 
         ctx->view_year = date_year(xp->dt);
         ctx->view_month = date_month(xp->dt);
+
         expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, FALSE);
+        expensestv_set_cursor_to_rowid(GTK_TREE_VIEW(ctx->expenses_view), xp->rowid);
         sidebar_refresh(ctx);
     }
     expeditdlg_free(d);
@@ -763,13 +765,13 @@ static void expensestv_del_expense_row(GtkTreeView *tv, GtkTreeIter *it, uictx_t
     expensestv_get_expense(gtk_tree_view_get_model(tv), it, xp);
     db_del_expense(db, xp);
 
-    //if (tv_get_next_it(tv, it))
-    //    tv_set_cursor(tv, it);
-    //else if (tv_get_prev_it(tv, it))
-    //    tv_set_cursor(tv, it);
-    //gtk_list_store_remove(ls, &it0);
+//    if (tv_get_next_it(tv, it))
+//        tv_set_cursor(tv, it);
+//    else if (tv_get_prev_it(tv, it))
+//        tv_set_cursor(tv, it);
+    gtk_list_store_remove(GTK_LIST_STORE(gtk_tree_view_get_model(tv)), &it0);
 
-    expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, TRUE);
+    //expensestv_refresh(GTK_TREE_VIEW(ctx->expenses_view), ctx, TRUE);
     sidebar_refresh(ctx);
 
     exp_free(xp);
