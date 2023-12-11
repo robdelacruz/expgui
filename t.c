@@ -15,10 +15,10 @@ int main(int argc, char *argv[]) {
     int z;
 
     gtk_init(&argc, &argv);
-    uictx_setup_ui(ctx);
+    setupui(ctx);
 
     if (argc > 1) {
-        z = uictx_open_expense_file(ctx, argv[1]);
+        z = open_expense_file(ctx, argv[1]);
         if (z != 0)
             print_error("Error reading expense file");
     }

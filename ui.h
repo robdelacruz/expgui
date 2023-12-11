@@ -30,7 +30,7 @@ uictx_t *uictx_new();
 void uictx_free(uictx_t *ctx);
 void uictx_reset(uictx_t *ctx);
 
-void uictx_setup_ui(uictx_t *ctx);
-int uictx_open_expense_file(uictx_t *ctx, char *xpfile);
+void setupui(uictx_t *ctx);
+int open_expense_file(uictx_t *ctx, char *xpfile);
 
 #endif
