@@ -607,6 +607,9 @@ static gboolean txt_filter_keypress(GtkTreeView *tv, GdkEventKey *e, gpointer da
     if (kv == GDK_KEY_Escape) {
         gtk_entry_set_text(GTK_ENTRY(ctx->txt_filter), "");
         return TRUE;
+    } else if (kv == GDK_KEY_Return) {
+        gtk_widget_grab_focus(ctx->expenses_view);
+        return TRUE;
     }
     return FALSE;
 }
