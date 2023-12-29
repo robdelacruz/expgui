@@ -45,6 +45,7 @@ static void mainmenu_file_saveas(GtkWidget *w, gpointer data);
 static void mainmenu_expense_add(GtkWidget *w, gpointer data);
 static void mainmenu_expense_edit(GtkWidget *w, gpointer data);
 static void mainmenu_expense_delete(GtkWidget *w, gpointer data);
+static void mainmenu_setup_cat(GtkWidget *w, gpointer data);
 
 // Expenses Treeview
 GtkWidget *tv_new(uictx_t *ctx);
@@ -89,6 +90,8 @@ static void expeditdlg_cal_day_selected_event(GtkCalendar *cal, gpointer data);
 static void expeditdlg_cal_day_selected_dblclick_event(GtkCalendar *cal, gpointer data);
 
 static GtkWidget *expdeldlg_new(db_t *db, exp_t *xp);
+static GtkWidget *cateditdlg_new(db_t *db);
+static void cateditdlg_name_edited(GtkCellRendererText *r, gchar *path, gchar *newname, GtkTreeView *tv);
 
 static void set_screen_css(char *cssfile) {
     GdkScreen *screen = gdk_screen_get_default();
@@ -279,6 +282,7 @@ static GtkWidget *mainmenu_new(uictx_t *ctx, GtkWidget *mainwin) {
     GtkWidget *m;
     GtkWidget *mi_file, *mi_file_new, *mi_file_open, *mi_file_save, *mi_file_saveas, *mi_file_quit;
     GtkWidget *mi_expense, *mi_expense_add, *mi_expense_edit, *mi_expense_delete;
+    GtkWidget *mi_setup, *mi_setup_cat;
     GtkAccelGroup *a;
 
     mi_file = gtk_menu_item_new_with_mnemonic("_File");
@@ -292,6 +296,9 @@ static GtkWidget *mainmenu_new(uictx_t *ctx, GtkWidget *mainwin) {
     mi_expense_add = gtk_menu_item_new_with_mnemonic("_Add");
     mi_expense_edit = gtk_menu_item_new_with_mnemonic("_Edit");
     mi_expense_delete = gtk_menu_item_new_with_mnemonic("_Delete");
+
+    mi_setup = gtk_menu_item_new_with_mnemonic("_Setup");
+    mi_setup_cat = gtk_menu_item_new_with_mnemonic("_Categories");
 
     m = gtk_menu_new();
     gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_file_new);
@@ -307,9 +314,14 @@ static GtkWidget *mainmenu_new(uictx_t *ctx, GtkWidget *mainwin) {
     gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_expense_delete);
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(mi_expense), m);
 
+    m = gtk_menu_new();
+    gtk_menu_shell_append(GTK_MENU_SHELL(m), mi_setup_cat);
+    gtk_menu_item_set_submenu(GTK_MENU_ITEM(mi_setup), m);
+
     mb = gtk_menu_bar_new();
     gtk_menu_shell_append(GTK_MENU_SHELL(mb), mi_file);
     gtk_menu_shell_append(GTK_MENU_SHELL(mb), mi_expense);
+    gtk_menu_shell_append(GTK_MENU_SHELL(mb), mi_setup);
 
     // accelerators
     a = gtk_accel_group_new();
@@ -324,16 +336,20 @@ static GtkWidget *mainmenu_new(uictx_t *ctx, GtkWidget *mainwin) {
     add_accel(mi_expense_edit, a, GDK_KEY_E, GDK_CONTROL_MASK);
     add_accel(mi_expense_delete, a, GDK_KEY_X, GDK_CONTROL_MASK);
 
+    add_accel(mi_setup_cat, a, GDK_KEY_C, GDK_CONTROL_MASK);
+
     g_signal_connect(mi_file_new, "activate", G_CALLBACK(mainmenu_file_new), ctx);
     g_signal_connect(mi_file_open, "activate", G_CALLBACK(mainmenu_file_open), ctx);
     g_signal_connect(mi_file_save, "activate", G_CALLBACK(mainmenu_file_save), ctx);
     g_signal_connect(mi_file_saveas, "activate", G_CALLBACK(mainmenu_file_saveas), ctx);
+    g_signal_connect(mi_file_quit, "activate", G_CALLBACK(gtk_main_quit), NULL);
 
     g_signal_connect(mi_expense_add, "activate", G_CALLBACK(mainmenu_expense_add), ctx);
     g_signal_connect(mi_expense_edit, "activate", G_CALLBACK(mainmenu_expense_edit), ctx);
     g_signal_connect(mi_expense_delete, "activate", G_CALLBACK(mainmenu_expense_delete), ctx);
 
-    g_signal_connect(mi_file_quit, "activate", G_CALLBACK(gtk_main_quit), NULL);
+    g_signal_connect(mi_setup_cat, "activate", G_CALLBACK(mainmenu_setup_cat), ctx);
+
 
     return mb;
 }
@@ -416,6 +432,16 @@ static void mainmenu_expense_delete(GtkWidget *w, gpointer data) {
     tv_del_expense_row(tv, &it, ctx);
 }
 
+static void mainmenu_setup_cat(GtkWidget *w, gpointer data) {
+    GtkWidget *dlg;
+    uictx_t *ctx = data;
+    db_t *db = ctx->db;
+
+    dlg = cateditdlg_new(db);
+    gtk_dialog_run(GTK_DIALOG(dlg));
+    gtk_widget_destroy(dlg);
+}
+
 enum exp_field_t {
     EXP_FIELD_ROWID,
     EXP_FIELD_DATE,
@@ -426,6 +452,11 @@ enum exp_field_t {
     EXP_FIELD_NCOLS
 };
 
+enum cat_field_t {
+    CAT_FIELD_ID,
+    CAT_FIELD_NAME,
+    CAT_FIELD_NCOLS
+};
 
 GtkWidget *tv_new(uictx_t *ctx) {
     GtkWidget *frame;
@@ -1147,6 +1178,91 @@ static GtkWidget *expdeldlg_new(db_t *db, exp_t *xp) {
 
     gtk_widget_show_all(dlg);
     return dlg;
+}
+
+static GtkWidget *cateditdlg_new(db_t *db) {
+    GtkWidget *dlg;
+    GtkWidget *dlgbox;
+    GtkWidget *tv;
+    GtkWidget *sw;
+    GtkCellRenderer *r;
+    GtkTreeViewColumn *col;
+    GtkListStore *ls;
+    GtkTreeIter it;
+    GtkWidget *btnadd, *btnclose;
+    int xpadding = 10;
+    int ypadding = 2;
+    cat_t *cat;
+
+    dlg = gtk_dialog_new();
+    gtk_window_set_title(GTK_WINDOW(dlg), "Categories");
+    gtk_dialog_set_default_response(GTK_DIALOG(dlg), GTK_RESPONSE_OK);
+
+    tv = gtk_tree_view_new();
+    sw = create_scroll_window(tv);
+    g_object_set(tv, "enable-search", FALSE, NULL);
+    gtk_widget_add_events(tv, GDK_KEY_PRESS_MASK);
+
+    r = gtk_cell_renderer_text_new();
+    col = gtk_tree_view_column_new_with_attributes("ID", r, "text", CAT_FIELD_ID, NULL);
+    gtk_tree_view_column_set_sort_column_id(col, CAT_FIELD_ID);
+    gtk_tree_view_column_set_resizable(col, FALSE);
+    gtk_cell_renderer_set_padding(r, xpadding, ypadding);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
+
+    r = gtk_cell_renderer_text_new();
+    g_object_set(r, "editable", TRUE, "editable-set", TRUE, NULL);
+    col = gtk_tree_view_column_new_with_attributes("Name", r, "text", CAT_FIELD_NAME, NULL);
+    gtk_tree_view_column_set_sort_column_id(col, CAT_FIELD_NAME);
+    gtk_tree_view_column_set_resizable(col, TRUE);
+    gtk_cell_renderer_set_padding(r, xpadding, ypadding);
+    gtk_tree_view_column_set_sizing(col, GTK_TREE_VIEW_COLUMN_FIXED);
+    gtk_tree_view_column_set_fixed_width(col, 200);
+    gtk_tree_view_column_set_expand(col, FALSE);
+    gtk_tree_view_append_column(GTK_TREE_VIEW(tv), col);
+
+    ls = gtk_list_store_new(CAT_FIELD_NCOLS,
+                            G_TYPE_UINT,   // CAT_FIELD_ID
+                            G_TYPE_STRING  // CAT_FIELD_NAME
+                            );
+    gtk_tree_view_set_model(GTK_TREE_VIEW(tv), GTK_TREE_MODEL(ls));
+    g_object_unref(ls);
+
+    for (int i=0; i < db->cats->len; i++) {
+        cat = db->cats->items[i];
+        gtk_list_store_append(ls, &it);
+        gtk_list_store_set(ls, &it,
+                           CAT_FIELD_ID, cat->id,
+                           CAT_FIELD_NAME, cat->name->s,
+                           -1);
+    }
+
+    dlgbox = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
+    gtk_box_pack_start(GTK_BOX(dlgbox), sw, TRUE, TRUE, 0);
+    gtk_widget_set_size_request(dlgbox, 250, 250);
+
+    btnadd = gtk_button_new_with_label("Add");
+    btnclose = gtk_button_new_with_label("Close");
+    gtk_dialog_add_action_widget(GTK_DIALOG(dlg), btnadd, 1);
+    gtk_dialog_add_action_widget(GTK_DIALOG(dlg), btnclose, GTK_RESPONSE_OK);
+
+    g_signal_connect(G_OBJECT(r), "edited", G_CALLBACK(cateditdlg_name_edited), tv);
+
+    gtk_widget_show_all(dlg);
+    return dlg;
+}
+
+static void cateditdlg_name_edited(GtkCellRendererText *r, gchar *path, gchar *newname, GtkTreeView *tv) {
+    GtkTreeIter it;
+    GtkListStore *ls;
+
+    if (strlen(newname) == 0)
+        return;
+
+    ls = GTK_LIST_STORE(gtk_tree_view_get_model(tv));
+    if (!gtk_tree_model_get_iter_from_string(GTK_TREE_MODEL(ls), &it, path))
+        return;
+    gtk_list_store_set(ls, &it, CAT_FIELD_NAME, newname, -1);
 }
 
 static void copy_year_str(int year, char *syear, size_t syear_len) {

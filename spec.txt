@@ -8,3 +8,4 @@ todo:
 Set treeview sort order:
 //    gtk_tree_sortable_set_sort_column_id(GTK_TREE_SORTABLE(ls), EXP_FIELD_ROWID, GTK_SORT_DESCENDING);
 
+https://stackoverflow.com/questions/50963806/set-cell-in-gtktreeview-to-edit-mode-programmatically
