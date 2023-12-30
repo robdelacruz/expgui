@@ -92,6 +92,8 @@ static void expeditdlg_cal_day_selected_dblclick_event(GtkCalendar *cal, gpointe
 static GtkWidget *expdeldlg_new(db_t *db, exp_t *xp);
 static GtkWidget *cateditdlg_new(db_t *db);
 static void cateditdlg_name_edited(GtkCellRendererText *r, gchar *path, gchar *newname, GtkTreeView *tv);
+static void cateditdlg_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data);
+static void cateditdlg_add_clicked(GtkWidget *w, GtkTreeView *tv);
 
 static void set_screen_css(char *cssfile) {
     GdkScreen *screen = gdk_screen_get_default();
@@ -1185,8 +1187,8 @@ static GtkWidget *cateditdlg_new(db_t *db) {
     GtkWidget *dlgbox;
     GtkWidget *tv;
     GtkWidget *sw;
-    GtkCellRenderer *r;
     GtkTreeViewColumn *col;
+    GtkCellRenderer *r;
     GtkListStore *ls;
     GtkTreeIter it;
     GtkWidget *btnadd, *btnclose;
@@ -1247,11 +1249,12 @@ static GtkWidget *cateditdlg_new(db_t *db) {
     gtk_dialog_add_action_widget(GTK_DIALOG(dlg), btnclose, GTK_RESPONSE_OK);
 
     g_signal_connect(G_OBJECT(r), "edited", G_CALLBACK(cateditdlg_name_edited), tv);
+    g_signal_connect(tv, "row-activated", G_CALLBACK(cateditdlg_row_activated), NULL);
+    g_signal_connect(btnadd, "clicked", G_CALLBACK(cateditdlg_add_clicked), tv);
 
     gtk_widget_show_all(dlg);
     return dlg;
 }
-
 static void cateditdlg_name_edited(GtkCellRendererText *r, gchar *path, gchar *newname, GtkTreeView *tv) {
     GtkTreeIter it;
     GtkListStore *ls;
@@ -1263,6 +1266,14 @@ static void cateditdlg_name_edited(GtkCellRendererText *r, gchar *path, gchar *n
     if (!gtk_tree_model_get_iter_from_string(GTK_TREE_MODEL(ls), &it, path))
         return;
     gtk_list_store_set(ls, &it, CAT_FIELD_NAME, newname, -1);
+}
+static void cateditdlg_row_activated(GtkTreeView *tv, GtkTreePath *tp, GtkTreeViewColumn *col, gpointer data) {
+    GtkTreeViewColumn *col1 = gtk_tree_view_get_column(tv, CAT_FIELD_NAME);
+    gtk_tree_view_set_cursor(tv, tp, col1, TRUE);
+}
+static void cateditdlg_add_clicked(GtkWidget *w, GtkTreeView *tv) {
+    printf("add clicked\n");
+    g_signal_stop_emission_by_name(G_OBJECT(w), "clicked");
 }
 
 static void copy_year_str(int year, char *syear, size_t syear_len) {
